@@ -16,6 +16,14 @@ pub struct State {
     config: wgpu::SurfaceConfiguration,
     is_surface_configured: bool,
     render_pipeline: wgpu::RenderPipeline,
+    render_pipeline2: wgpu::RenderPipeline,
+    active_pipeline: ActivePipeline,
+    vertex_buffer: wgpu::Buffer,
+}
+
+enum ActivePipeline {
+    One,
+    Two,
 }
 
 impl State {
@@ -121,6 +129,44 @@ impl State {
             cache: None,
         });
 
+        let render_pipeline2 = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Render Pipeline2"),
+            layout: Some(&render_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_main"),
+                buffers: &[],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_main2"),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: config.format,
+                    blend: Some(wgpu::BlendState::REPLACE),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: Some(wgpu::Face::Back),
+                polygon_mode: wgpu::PolygonMode::Fill,
+                unclipped_depth: false,
+                conservative: false,
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            multiview_mask: None,
+            cache: None,
+        });
+
         Ok(Self {
             surface,
             device,
@@ -128,13 +174,21 @@ impl State {
             config,
             is_surface_configured: false,
             render_pipeline,
+            render_pipeline2,
             window,
         })
     }
 
-    fn handle_key(&self, event_loop: &ActiveEventLoop, code: KeyCode, is_pressed: bool) {
-        if let (KeyCode::Escape, true) = (code, is_pressed) {
-            event_loop.exit()
+    fn handle_key(&mut self, event_loop: &ActiveEventLoop, code: KeyCode, is_pressed: bool) {
+        match (code, is_pressed) {
+            (KeyCode::Escape, true) => event_loop.exit(),
+            (KeyCode::Space, true) => {
+                self.active_pipeline = match self.active_pipeline {
+                    ActivePipeline::One => ActivePipeline::Two,
+                    ActivePipeline::Two => ActivePipeline::One,
+                }
+            }
+            _ => (),
         }
     }
 
@@ -207,7 +261,11 @@ impl State {
                 multiview_mask: None,
             });
 
-            render_pass.set_pipeline(&self.render_pipeline);
+            let pipeline = match self.active_pipeline {
+                ActivePipeline::One => &self.render_pipeline,
+                ActivePipeline::Two => &self.render_pipeline2,
+            };
+            render_pass.set_pipeline(pipeline);
             render_pass.draw(0..3, 0..1);
         }
 
