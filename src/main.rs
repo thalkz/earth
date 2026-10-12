@@ -1,6 +1,4 @@
-use crate::app::run;
-
-mod app;
+use earth::run;
 
 fn main() {
     run().expect("failed to run");
