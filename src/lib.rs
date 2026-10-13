@@ -3,6 +3,7 @@ use winit::event_loop::EventLoop;
 use crate::app::App;
 
 mod app;
+mod camera;
 mod data;
 mod state;
 mod texture;
