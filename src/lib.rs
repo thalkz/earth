@@ -3,7 +3,9 @@ use winit::event_loop::EventLoop;
 use crate::app::App;
 
 mod app;
+mod data;
 mod state;
+mod texture;
 mod vertex;
 
 pub fn run() -> anyhow::Result<()> {
