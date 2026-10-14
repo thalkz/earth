@@ -5,6 +5,7 @@ use crate::app::App;
 mod app;
 mod camera;
 mod data;
+mod instance;
 mod state;
 mod texture;
 mod vertex;
