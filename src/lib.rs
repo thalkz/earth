@@ -6,9 +6,10 @@ mod app;
 mod camera;
 mod data;
 mod instance;
+mod model;
+mod resources;
 mod state;
 mod texture;
-mod vertex;
 
 pub fn run() -> anyhow::Result<()> {
     env_logger::init();
