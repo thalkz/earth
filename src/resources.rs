@@ -1,8 +1,6 @@
-use std::{fs, io, path};
-
-use wgpu::util::DeviceExt;
-
 use crate::{model, texture};
+use std::{fs, io, path};
+use wgpu::util::DeviceExt;
 
 const OUT_DIR: &str = env!("OUT_DIR");
 
@@ -40,11 +38,10 @@ pub async fn load_model(
     layout: &wgpu::BindGroupLayout,
 ) -> anyhow::Result<model::Model> {
     let obj_text = load_string(file_name).await?;
-    let obj_cursor = io::Cursor::new(obj_text);
-    let mut obj_reader = io::BufReader::new(obj_cursor);
+    let obj_cursor = futures::io::Cursor::new(obj_text);
+    let mut obj_reader = futures::io::BufReader::new(obj_cursor);
 
-    // TODO(thalkz) make this actually async loading
-    let (models, obj_materials) = tobj::load_obj_buf_async(
+    let (models, obj_materials) = tobj::futures::load_obj_buf(
         &mut obj_reader,
         &tobj::LoadOptions {
             triangulate: true,
@@ -52,7 +49,7 @@ pub async fn load_model(
             ..Default::default()
         },
         |p| async move {
-            let mat_text = load_string(&p).await.unwrap();
+            let mat_text = load_string(&p.to_str().unwrap()).await.unwrap();
             tobj::load_mtl_buf(&mut io::BufReader::new(io::Cursor::new(mat_text)))
         },
     )
