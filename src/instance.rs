@@ -51,10 +51,10 @@ impl InstanceRaw {
 
 impl From<&Instance> for InstanceRaw {
     fn from(value: &Instance) -> Self {
+        let model = cgmath::Matrix4::from_translation(value.position)
+            * cgmath::Matrix4::from(value.rotation);
         InstanceRaw {
-            model: (cgmath::Matrix4::from_translation(value.position)
-                * cgmath::Matrix4::from(value.rotation))
-            .into(),
+            model: model.into(),
         }
     }
 }
