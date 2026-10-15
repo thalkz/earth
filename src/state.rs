@@ -413,7 +413,7 @@ fn create_render_pipeline(
         vertex: wgpu::VertexState {
             module: &shader,
             entry_point: Some("vs_main"),
-            buffers: vertex_layouts, //&[Some(model::ModelVertex::desc()), Some(InstanceRaw::desc())],
+            buffers: vertex_layouts,
             compilation_options: wgpu::PipelineCompilationOptions::default(),
         },
         fragment: Some(wgpu::FragmentState {
