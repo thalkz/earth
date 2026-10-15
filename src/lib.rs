@@ -6,6 +6,7 @@ mod app;
 mod camera;
 mod data;
 mod instance;
+mod light;
 mod model;
 mod resources;
 mod state;
