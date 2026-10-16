@@ -208,9 +208,10 @@ Decouple hardware event codes (`winit::keyboard::KeyCode`) from application inte
 ```text
 src/
 ├── main.rs                   # Executable entry point
-├── lib.rs                    # Library root, exports run()
-├── app.rs                    # Application & Platform Layer entry & lifecycle
+├── lib.rs                    # Library facade root, exports run()
+├── app.rs                    # Application layer facade
 ├── app/                      # Application submodules
+│   ├── app.rs                # Winit ApplicationHandler implementation & run()
 │   ├── input.rs              # Raw input tracking & virtual Action mapping
 │   ├── state.rs              # Runtime windowed graphics state & loop coordination
 │   └── time.rs               # High-precision frame timing & delta calculations
@@ -220,22 +221,24 @@ src/
 │   ├── surface.rs            # SurfaceHandler (Surface, Config, DepthTexture)
 │   ├── pipeline.rs           # Pipeline builder & layout utilities
 │   └── texture.rs            # Texture, TextureView, and Sampler abstractions
-├── scene.rs                  # Scene facade & container
+├── scene.rs                  # Scene facade
 ├── scene/                    # Scene submodules
 │   ├── camera.rs             # Camera, projection, and orbital controller (glam)
 │   ├── instance.rs           # Spatial Instance struct & procedural instance generators
-│   ├── transform.rs          # Translation, Rotation, Scale (TRS)
-│   └── light.rs              # Light structs & GPU uniform representations
+│   ├── light.rs              # Light structs & GPU uniform representations
+│   ├── scene.rs              # Scene container & simulation updates
+│   └── transform.rs          # Translation, Rotation, Scale (TRS)
 ├── assets.rs                 # Asset facade
 ├── assets/                   # Asset submodules
 │   ├── model.rs              # Model, Mesh, Material, and draw helpers
 │   └── loader.rs             # Async OBJ/MTL, image, and binary loaders
-├── renderer.rs               # Renderer facade & frame resource coordination
-└── renderer/                 # Render passes & shaders
+├── renderer.rs               # Renderer facade
+└── renderer/                 # Render passes, frame resources & shaders
     ├── forward_pass.rs       # Main mesh forward-lighting pass & InstanceRaw layout
     ├── forward.wgsl          # Forward lighting shader
     ├── gizmo_pass.rs         # Gizmo and debug visualization pass
-    └── gizmo.wgsl            # Gizmo shader
+    ├── gizmo.wgsl            # Gizmo shader
+    └── renderer.rs           # Renderer struct, uniform management & draw coordination
 ```
 
 ---
