@@ -1,59 +1,31 @@
+use crate::app::{Action, InputState};
 use glam::{Mat4, Vec3};
-use winit::keyboard::KeyCode;
+use std::time::Duration;
 
 pub struct CameraController {
-    speed: f32,
-    is_forward_pressed: bool,
-    is_backward_pressed: bool,
-    is_left_pressed: bool,
-    is_right_pressed: bool,
+    pub speed: f32,
 }
 
 impl CameraController {
     pub fn new(speed: f32) -> Self {
-        Self {
-            speed,
-            is_forward_pressed: false,
-            is_backward_pressed: false,
-            is_left_pressed: false,
-            is_right_pressed: false,
-        }
+        Self { speed }
     }
 
-    pub fn handle_key(&mut self, code: KeyCode, is_pressed: bool) -> bool {
-        match code {
-            KeyCode::KeyW | KeyCode::ArrowUp => {
-                self.is_forward_pressed = is_pressed;
-                true
-            }
-            KeyCode::KeyA | KeyCode::ArrowLeft => {
-                self.is_left_pressed = is_pressed;
-                true
-            }
-            KeyCode::KeyS | KeyCode::ArrowDown => {
-                self.is_backward_pressed = is_pressed;
-                true
-            }
-            KeyCode::KeyD | KeyCode::ArrowRight => {
-                self.is_right_pressed = is_pressed;
-                true
-            }
-            _ => false,
-        }
-    }
+    pub fn update_camera(&self, camera: &mut Camera, input: &InputState, dt: Duration) {
+        let dt_secs = dt.as_secs_f32();
+        let move_amount = self.speed * dt_secs;
 
-    pub fn update_camera(&self, camera: &mut Camera) {
         let forward = camera.target - camera.eye;
         let forward_norm = forward.normalize();
         let forward_mag = forward.length();
 
         // Prevents glitching when the camera gets too close to the
         // center of the scene.
-        if self.is_forward_pressed && forward_mag > self.speed {
-            camera.eye += forward_norm * self.speed;
+        if input.is_active(Action::MoveForward) && forward_mag > move_amount {
+            camera.eye += forward_norm * move_amount;
         }
-        if self.is_backward_pressed {
-            camera.eye -= forward_norm * self.speed;
+        if input.is_active(Action::MoveBackward) {
+            camera.eye -= forward_norm * move_amount;
         }
 
         let right = forward_norm.cross(camera.up);
@@ -62,14 +34,14 @@ impl CameraController {
         let forward = camera.target - camera.eye;
         let forward_mag = forward.length();
 
-        if self.is_right_pressed {
+        if input.is_active(Action::MoveRight) {
             // Rescale the distance between the target and the eye so
             // that it doesn't change. The eye, therefore, still
             // lies on the circle made by the target and eye.
-            camera.eye = camera.target - (forward + right * self.speed).normalize() * forward_mag;
+            camera.eye = camera.target - (forward + right * move_amount).normalize() * forward_mag;
         }
-        if self.is_left_pressed {
-            camera.eye = camera.target - (forward - right * self.speed).normalize() * forward_mag;
+        if input.is_active(Action::MoveLeft) {
+            camera.eye = camera.target - (forward - right * move_amount).normalize() * forward_mag;
         }
     }
 }

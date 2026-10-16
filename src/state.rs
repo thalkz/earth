@@ -1,10 +1,12 @@
+use crate::app::InputState;
 use crate::data::build_instances;
 use crate::instance::InstanceRaw;
 use crate::model::Vertex;
 use crate::{camera, instance, light, model, resources, texture};
 use std::sync::Arc;
+use std::time::Duration;
 use wgpu::util::DeviceExt;
-use winit::{event_loop::ActiveEventLoop, keyboard::KeyCode, window::Window};
+use winit::window::Window;
 
 pub struct State {
     window: Arc<Window>,
@@ -139,7 +141,7 @@ impl State {
             label: Some("camera_bind_group"),
         });
 
-        let camera_controller = camera::CameraController::new(0.2);
+        let camera_controller = camera::CameraController::new(4.0);
 
         let shader = wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
@@ -262,13 +264,6 @@ impl State {
         })
     }
 
-    pub fn handle_key(&mut self, event_loop: &ActiveEventLoop, code: KeyCode, is_pressed: bool) {
-        if let (KeyCode::Escape, true) = (code, is_pressed) {
-            event_loop.exit()
-        } else {
-            self.camera_controller.handle_key(code, is_pressed);
-        }
-    }
 
     pub fn resize(&mut self, width: u32, height: u32) {
         if width > 0 && height > 0 {
@@ -374,8 +369,8 @@ impl State {
         Ok(())
     }
 
-    pub fn update(&mut self) {
-        self.camera_controller.update_camera(&mut self.camera);
+    pub fn update(&mut self, dt: Duration, input: &InputState) {
+        self.camera_controller.update_camera(&mut self.camera, input, dt);
         self.camera_uniform.update_view_proj(&self.camera);
         self.queue.write_buffer(
             &self.camera_buffer,
@@ -384,7 +379,8 @@ impl State {
         );
 
         let old_position = glam::Vec3::from_array(self.light_uniform.position);
-        let rotation = glam::Quat::from_axis_angle(glam::Vec3::Y, 1.0_f32.to_radians());
+        let rotation_speed = 60.0_f32.to_radians();
+        let rotation = glam::Quat::from_axis_angle(glam::Vec3::Y, rotation_speed * dt.as_secs_f32());
         self.light_uniform.position = (rotation * old_position).to_array();
         self.queue.write_buffer(
             &self.light_buffer,

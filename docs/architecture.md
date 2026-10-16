@@ -209,29 +209,29 @@ Decouple hardware event codes (`winit::keyboard::KeyCode`) from application inte
 src/
 ├── main.rs                   # Executable entry point
 ├── lib.rs                    # Library root, exports run()
-├── app/                      # Application & Platform Layer
-│   ├── mod.rs                # Winit ApplicationHandler implementation
+├── app.rs                    # Application & Platform Layer entry & lifecycle
+├── app/                      # Application submodules
 │   ├── input.rs              # Raw input tracking & virtual Action mapping
 │   └── time.rs               # High-precision frame timing & delta calculations
-├── gpu/                      # Low-Level Graphics Foundation
-│   ├── mod.rs
+├── gpu.rs                    # Graphics core facade
+├── gpu/                      # Low-level graphics submodules
 │   ├── context.rs            # GpuContext (Instance, Adapter, Device, Queue)
 │   ├── surface.rs            # SurfaceManager (Surface, Config, DepthTexture)
 │   ├── pipeline.rs           # Pipeline builder & layout utilities
 │   └── texture.rs            # Texture, TextureView, and Sampler abstractions
-├── scene/                    # Scene Representation & Simulation
-│   ├── mod.rs                # Scene container (Entities, Active Camera, Lights)
+├── scene.rs                  # Scene facade & container
+├── scene/                    # Scene submodules
 │   ├── camera.rs             # Camera, projection, and orbital controller (glam)
 │   ├── transform.rs          # Translation, Rotation, Scale (TRS)
 │   └── light.rs              # Light structs & GPU uniform representations
-├── assets/                   # Resource Management
-│   ├── mod.rs                # AssetServer & Handle definitions
+├── assets.rs                 # AssetServer & Handle definitions
+├── assets/                   # Asset submodules
 │   ├── mesh.rs               # GpuMesh (vertex/index buffers, layout descriptors)
 │   ├── material.rs           # Material definition & bind group creation
 │   └── loader.rs             # Async OBJ/MTL, image, and binary loaders
-└── renderer/                 # Render Execution
-    ├── mod.rs                # Renderer facade & draw queue coordination
-    └── passes/               # Modular Render Passes
+├── renderer.rs               # Renderer facade & draw queue coordination
+└── renderer/                 # Modular render passes
+    └── passes/
         ├── forward.rs        # Main mesh forward-lighting pass
         └── light_viz.rs      # Light source indicator debug pass
 ```
@@ -314,8 +314,8 @@ impl ForwardPass {
 
 - [ ] **Decouple `State`:** Extract `GpuContext` and `SurfaceManager` from `State`.
 - [ ] **Standardize Bind Group Frequencies:** Refactor `@group(...)` indices across `shader.wgsl` and `light.wgsl`.
-- [ ] **Adopt `glam`:** Replace `cgmath` in `camera.rs` and `instance.rs` with `glam::Vec3`, `glam::Quat`, and `glam::Mat4`.
-- [ ] **Frame Timing (`dt`):** Integrate high-precision delta time in `App::window_event` (`RedrawRequested`).
-- [ ] **Input Abstraction:** Extract key handling into an `InputState` with an `Action` mapping enum.
+- [x] **Adopt `glam`:** Replace `cgmath` in `camera.rs` and `instance.rs` with `glam::Vec3`, `glam::Quat`, and `glam::Mat4`.
+- [x] **Frame Timing (`dt`):** Integrate high-precision delta time in `App::window_event` (`RedrawRequested`).
+- [x] **Input Abstraction:** Extract key handling into an `InputState` with an `Action` mapping enum.
 - [ ] **Asset Handles:** Transition `Model` into reusable `GpuMesh` and `Material` entries inside an `AssetServer`.
 - [ ] **Pass Separation:** Split main rendering into `ForwardPass` and `LightGizmoPass`.
