@@ -1,5 +1,5 @@
-use crate::assets::{DrawGizmo, Model, ModelVertex, Vertex};
-use crate::gpu::{Texture, create_render_pipeline};
+use crate::assets::{Model, ModelVertex, Vertex};
+use crate::gpu::{create_render_pipeline, Texture};
 
 pub struct GizmoPass {
     pub pipeline: wgpu::RenderPipeline,
@@ -44,6 +44,12 @@ impl GizmoPass {
         light_bind_group: &'a wgpu::BindGroup,
     ) {
         render_pass.set_pipeline(&self.pipeline);
-        render_pass.draw_gizmo_model(model, camera_bind_group, light_bind_group);
+        for mesh in &model.meshes {
+            render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+            render_pass.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+            render_pass.set_bind_group(0, camera_bind_group, &[]);
+            render_pass.set_bind_group(1, light_bind_group, &[]);
+            render_pass.draw_indexed(0..mesh.num_elements, 0, 0..1);
+        }
     }
 }
