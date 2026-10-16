@@ -1,6 +1,6 @@
 mod passes;
 
-pub use passes::{ForwardPass, LightVizPass};
+pub use passes::{ForwardPass, GizmoPass};
 
 use crate::assets::Model;
 use crate::gpu::{GpuContext, SurfaceHandler};
@@ -8,7 +8,7 @@ use crate::scene::Scene;
 
 pub struct Renderer {
     forward_pass: ForwardPass,
-    light_viz_pass: LightVizPass,
+    gizmo_pass: GizmoPass,
     pub camera_bind_group_layout: wgpu::BindGroupLayout,
     pub light_bind_group_layout: wgpu::BindGroupLayout,
     pub texture_bind_group_layout: wgpu::BindGroupLayout,
@@ -77,7 +77,7 @@ impl Renderer {
             &light_bind_group_layout,
         );
 
-        let light_viz_pass = LightVizPass::new(
+        let gizmo_pass = GizmoPass::new(
             device,
             color_format,
             &camera_bind_group_layout,
@@ -86,7 +86,7 @@ impl Renderer {
 
         Self {
             forward_pass,
-            light_viz_pass,
+            gizmo_pass,
             camera_bind_group_layout,
             light_bind_group_layout,
             texture_bind_group_layout,
@@ -149,7 +149,7 @@ impl Renderer {
 
             render_pass.set_vertex_buffer(1, instance_buffer.slice(..));
 
-            self.light_viz_pass
+            self.gizmo_pass
                 .draw(&mut render_pass, model, camera_bind_group, light_bind_group);
 
             self.forward_pass.draw(

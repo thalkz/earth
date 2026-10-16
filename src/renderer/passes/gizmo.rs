@@ -1,11 +1,11 @@
-use crate::assets::{DrawLight, Model, ModelVertex, Vertex};
+use crate::assets::{DrawGizmo, Model, ModelVertex, Vertex};
 use crate::gpu::{create_render_pipeline, Texture};
 
-pub struct LightVizPass {
+pub struct GizmoPass {
     pub pipeline: wgpu::RenderPipeline,
 }
 
-impl LightVizPass {
+impl GizmoPass {
     pub fn new(
         device: &wgpu::Device,
         color_format: wgpu::TextureFormat,
@@ -13,7 +13,7 @@ impl LightVizPass {
         light_layout: &wgpu::BindGroupLayout,
     ) -> Self {
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Light Viz Pipeline Layout"),
+            label: Some("Gizmo Pipeline Layout"),
             bind_group_layouts: &[
                 Some(camera_layout),
                 Some(light_layout),
@@ -22,12 +22,12 @@ impl LightVizPass {
         });
 
         let shader = wgpu::ShaderModuleDescriptor {
-            label: Some("Light Viz Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("../../light.wgsl").into()),
+            label: Some("Gizmo Shader"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("../../gizmo.wgsl").into()),
         };
 
         let pipeline = create_render_pipeline(
-            "Light Viz Render Pipeline",
+            "Gizmo Render Pipeline",
             device,
             &layout,
             color_format,
@@ -47,6 +47,6 @@ impl LightVizPass {
         light_bind_group: &'a wgpu::BindGroup,
     ) {
         render_pass.set_pipeline(&self.pipeline);
-        render_pass.draw_light_model(model, camera_bind_group, light_bind_group);
+        render_pass.draw_gizmo_model(model, camera_bind_group, light_bind_group);
     }
 }

@@ -232,7 +232,7 @@ src/
 └── renderer/                 # Modular render passes
     └── passes/
         ├── forward.rs        # Main mesh forward-lighting pass
-        └── light_viz.rs      # Light source indicator debug pass
+        └── gizmo.rs          # Gizmo and debug visualization pass
 ```
 
 ---
@@ -312,9 +312,9 @@ impl ForwardPass {
 ## 7. Migration Checklist
 
 - [x] **Decouple `State`:** Extract `GpuContext` and `SurfaceManager` from `State`.
-- [ ] **Standardize Bind Group Frequencies:** Refactor `@group(...)` indices across `shader.wgsl` and `light.wgsl`.
+- [ ] **Standardize Bind Group Frequencies:** Refactor `@group(...)` indices across `shader.wgsl` and `gizmo.wgsl`.
 - [x] **Adopt `glam`:** Replace `cgmath` in `camera.rs` and `instance.rs` with `glam::Vec3`, `glam::Quat`, and `glam::Mat4`.
 - [x] **Frame Timing (`dt`):** Integrate high-precision delta time in `App::window_event` (`RedrawRequested`).
 - [x] **Input Abstraction:** Extract key handling into an `InputState` with an `Action` mapping enum.
 - [ ] **Asset Handles:** Transition `Model` into reusable `GpuMesh` and `Material` entries inside an `AssetServer`.
-- [x] **Pass Separation:** Split main rendering into `ForwardPass` and `LightVizPass`.
+- [x] **Pass Separation:** Split main rendering into `ForwardPass` and `GizmoPass`.

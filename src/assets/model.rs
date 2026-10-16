@@ -156,15 +156,15 @@ where
 }
 
 #[allow(dead_code)]
-pub trait DrawLight<'a> {
-    fn draw_light_mesh(
+pub trait DrawGizmo<'a> {
+    fn draw_gizmo_mesh(
         &mut self,
         mesh: &'a Mesh,
         camera_bind_group: &'a wgpu::BindGroup,
         light_bind_group: &'a wgpu::BindGroup,
     );
 
-    fn draw_light_mesh_instanced(
+    fn draw_gizmo_mesh_instanced(
         &mut self,
         mesh: &'a Mesh,
         instances: Range<u32>,
@@ -172,14 +172,14 @@ pub trait DrawLight<'a> {
         light_bind_group: &'a wgpu::BindGroup,
     );
 
-    fn draw_light_model(
+    fn draw_gizmo_model(
         &mut self,
         model: &'a Model,
         camera_bind_group: &'a wgpu::BindGroup,
         light_bind_group: &'a wgpu::BindGroup,
     );
 
-    fn draw_light_model_instanced(
+    fn draw_gizmo_model_instanced(
         &mut self,
         model: &'a Model,
         instances: Range<u32>,
@@ -188,20 +188,20 @@ pub trait DrawLight<'a> {
     );
 }
 
-impl<'a, 'b> DrawLight<'b> for wgpu::RenderPass<'a>
+impl<'a, 'b> DrawGizmo<'b> for wgpu::RenderPass<'a>
 where
     'b: 'a,
 {
-    fn draw_light_mesh(
+    fn draw_gizmo_mesh(
         &mut self,
         mesh: &'b Mesh,
         camera_bind_group: &'b wgpu::BindGroup,
         light_bind_group: &'b wgpu::BindGroup,
     ) {
-        self.draw_light_mesh_instanced(mesh, 0..1, camera_bind_group, light_bind_group);
+        self.draw_gizmo_mesh_instanced(mesh, 0..1, camera_bind_group, light_bind_group);
     }
 
-    fn draw_light_mesh_instanced(
+    fn draw_gizmo_mesh_instanced(
         &mut self,
         mesh: &'b Mesh,
         instances: Range<u32>,
@@ -215,16 +215,16 @@ where
         self.draw_indexed(0..mesh.num_elements, 0, instances);
     }
 
-    fn draw_light_model(
+    fn draw_gizmo_model(
         &mut self,
         model: &'b Model,
         camera_bind_group: &'b wgpu::BindGroup,
         light_bind_group: &'b wgpu::BindGroup,
     ) {
-        self.draw_light_model_instanced(model, 0..1, camera_bind_group, light_bind_group);
+        self.draw_gizmo_model_instanced(model, 0..1, camera_bind_group, light_bind_group);
     }
 
-    fn draw_light_model_instanced(
+    fn draw_gizmo_model_instanced(
         &mut self,
         model: &'b Model,
         instances: Range<u32>,
@@ -232,7 +232,7 @@ where
         light_bind_group: &'b wgpu::BindGroup,
     ) {
         for mesh in &model.meshes {
-            self.draw_light_mesh_instanced(
+            self.draw_gizmo_mesh_instanced(
                 mesh,
                 instances.clone(),
                 camera_bind_group,

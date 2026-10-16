@@ -1,5 +1,5 @@
 mod forward;
-mod light_viz;
+mod gizmo;
 
 pub use forward::ForwardPass;
-pub use light_viz::LightVizPass;
+pub use gizmo::GizmoPass;
