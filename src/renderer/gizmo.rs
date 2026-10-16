@@ -1,5 +1,8 @@
-use super::model::{model_vertex_layout, GpuModel};
-use crate::gpu::{create_render_pipeline, Texture};
+use super::model::GpuModel;
+use crate::{
+    assets::Vertex,
+    gpu::{Texture, create_render_pipeline},
+};
 
 pub struct GizmoPass {
     pub pipeline: wgpu::RenderPipeline,
@@ -29,7 +32,7 @@ impl GizmoPass {
             &layout,
             color_format,
             Some(Texture::DEPTH_FORMAT),
-            &[Some(model_vertex_layout())],
+            &[Some(Vertex::desc())],
             shader,
         );
 

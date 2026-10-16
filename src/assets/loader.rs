@@ -1,4 +1,4 @@
-use super::model::{ImageAsset, Material, Mesh, Model, ModelVertex};
+use super::model::{ImageAsset, Material, Mesh, Model, Vertex};
 use image::GenericImageView;
 use std::{fs, io, path};
 
@@ -70,7 +70,7 @@ pub async fn load_model(file_name: &str) -> anyhow::Result<Model> {
             let vertices = (0..m.mesh.positions.len() / 3)
                 .map(|i| {
                     if m.mesh.normals.is_empty() {
-                        ModelVertex {
+                        Vertex {
                             position: [
                                 m.mesh.positions[i * 3],
                                 m.mesh.positions[i * 3 + 1],
@@ -83,7 +83,7 @@ pub async fn load_model(file_name: &str) -> anyhow::Result<Model> {
                             normal: [0.0, 0.0, 0.0],
                         }
                     } else {
-                        ModelVertex {
+                        Vertex {
                             position: [
                                 m.mesh.positions[i * 3],
                                 m.mesh.positions[i * 3 + 1],

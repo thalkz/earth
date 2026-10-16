@@ -7,7 +7,7 @@ pub struct Model {
 #[derive(Clone, Debug)]
 pub struct Mesh {
     pub name: String,
-    pub vertices: Vec<ModelVertex>,
+    pub vertices: Vec<Vertex>,
     pub indices: Vec<u32>,
     pub material: usize,
 }
@@ -27,7 +27,7 @@ pub struct ImageAsset {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct ModelVertex {
+pub struct Vertex {
     pub position: [f32; 3],
     pub tex_coords: [f32; 2],
     pub normal: [f32; 3],
