@@ -1,3 +1,4 @@
+use crate::assets::ModelHandle;
 use crate::scene::{Camera, CameraActionState, CameraController, Instance, Light, build_instances};
 use std::time::Duration;
 
@@ -9,11 +10,11 @@ pub struct Scene {
 }
 
 impl Scene {
-    pub fn new(width: u32, height: u32) -> Self {
+    pub fn new(width: u32, height: u32, model: ModelHandle) -> Self {
         let camera = Camera::new(width, height);
         let camera_controller = CameraController::new(4.0);
         let light = Light::new(glam::vec3(2.0, 2.0, 2.0), glam::vec3(1.0, 1.0, 1.0));
-        let instances = build_instances();
+        let instances = build_instances(model);
 
         Self {
             camera,

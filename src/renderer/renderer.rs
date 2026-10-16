@@ -1,7 +1,7 @@
-use crate::assets::Model;
+use crate::assets::AssetServer;
 use crate::gpu::{GpuContext, SurfaceHandler};
 use crate::renderer::{ForwardPass, GizmoPass, InstanceRaw};
-use crate::scene::{CameraUniform, Instance, Scene};
+use crate::scene::{CameraUniform, Scene};
 use wgpu::util::DeviceExt;
 
 pub struct Renderer {
@@ -17,11 +17,7 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    pub fn new(
-        device: &wgpu::Device,
-        color_format: wgpu::TextureFormat,
-        initial_instances: &[Instance],
-    ) -> Self {
+    pub fn new(device: &wgpu::Device, color_format: wgpu::TextureFormat) -> Self {
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[
@@ -122,13 +118,13 @@ impl Renderer {
             label: Some("light_bind_group"),
         });
 
-        let instance_data: Vec<InstanceRaw> = initial_instances.iter().map(|i| i.into()).collect();
-        let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Instance Buffer"),
-            contents: bytemuck::cast_slice(&instance_data),
+            size: std::mem::size_of::<InstanceRaw>() as u64,
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
         });
-        let instance_count = instance_data.len() as u32;
+        let instance_count = 0;
 
         Self {
             forward_pass,
@@ -160,13 +156,13 @@ impl Renderer {
         );
 
         let instance_data: Vec<InstanceRaw> = scene.instances.iter().map(|i| i.into()).collect();
-        if (instance_data.len() as u32) <= self.instance_count {
+        if !instance_data.is_empty() && (instance_data.len() as u32) <= self.instance_count {
             gpu.queue.write_buffer(
                 &self.instance_buffer,
                 0,
                 bytemuck::cast_slice(&instance_data),
             );
-        } else {
+        } else if !instance_data.is_empty() {
             self.instance_buffer =
                 gpu.device
                     .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -183,7 +179,7 @@ impl Renderer {
         gpu: &GpuContext,
         surface: &mut SurfaceHandler,
         scene: &Scene,
-        model: &Model,
+        assets: &AssetServer,
     ) -> anyhow::Result<()> {
         let Some(output) = surface.get_current_texture(&gpu.device)? else {
             return Ok(());
@@ -231,20 +227,22 @@ impl Renderer {
 
             render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
 
-            self.gizmo_pass.draw(
-                &mut render_pass,
-                model,
-                &self.camera_bind_group,
-                &self.light_bind_group,
-            );
+            if let Some(model) = scene.instances.first().and_then(|i| assets.get_model(i.model)) {
+                self.gizmo_pass.draw(
+                    &mut render_pass,
+                    model,
+                    &self.camera_bind_group,
+                    &self.light_bind_group,
+                );
 
-            self.forward_pass.draw(
-                &mut render_pass,
-                model,
-                0..scene.instances.len() as u32,
-                &self.camera_bind_group,
-                &self.light_bind_group,
-            );
+                self.forward_pass.draw(
+                    &mut render_pass,
+                    model,
+                    0..scene.instances.len() as u32,
+                    &self.camera_bind_group,
+                    &self.light_bind_group,
+                );
+            }
         }
 
         gpu.queue.submit(std::iter::once(encoder.finish()));

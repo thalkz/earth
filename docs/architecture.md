@@ -230,8 +230,10 @@ src/
 │   └── transform.rs          # Translation, Rotation, Scale (TRS)
 ├── assets.rs                 # Asset facade
 ├── assets/                   # Asset submodules
-│   ├── model.rs              # Model, Mesh, Material, and draw helpers
-│   └── loader.rs             # Async OBJ/MTL, image, and binary loaders
+│   ├── handle.rs             # ModelHandle, MeshHandle, MaterialHandle
+│   ├── loader.rs             # Async OBJ/MTL, image, and binary loaders
+│   ├── model.rs              # Model, Mesh, and Material definitions
+│   └── server.rs             # AssetServer resource cache
 ├── renderer.rs               # Renderer facade
 └── renderer/                 # Render passes, frame resources & shaders
     ├── forward_pass.rs       # Main mesh forward-lighting pass & InstanceRaw layout
@@ -322,5 +324,5 @@ impl ForwardPass {
 - [x] **Adopt `glam`:** Replace `cgmath` in `camera.rs` and `instance.rs` with `glam::Vec3`, `glam::Quat`, and `glam::Mat4`.
 - [x] **Frame Timing (`dt`):** Integrate high-precision delta time in `App::window_event` (`RedrawRequested`).
 - [x] **Input Abstraction:** Extract key handling into an `InputState` with an `Action` mapping enum.
-- [ ] **Asset Handles:** Transition `Model` into reusable `GpuMesh` and `Material` entries inside an `AssetServer`.
+- [x] **Asset Handles:** Transition `Model` into reusable entries inside an `AssetServer`.
 - [x] **Pass Separation:** Split main rendering into `ForwardPass` and `GizmoPass`.
