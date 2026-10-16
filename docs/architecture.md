@@ -317,4 +317,4 @@ impl ForwardPass {
 - [x] **Frame Timing (`dt`):** Integrate high-precision delta time in `App::window_event` (`RedrawRequested`).
 - [x] **Input Abstraction:** Extract key handling into an `InputState` with an `Action` mapping enum.
 - [ ] **Asset Handles:** Transition `Model` into reusable `GpuMesh` and `Material` entries inside an `AssetServer`.
-- [ ] **Pass Separation:** Split main rendering into `ForwardPass` and `LightGizmoPass`.
+- [x] **Pass Separation:** Split main rendering into `ForwardPass` and `LightVizPass`.
