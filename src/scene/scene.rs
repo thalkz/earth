@@ -1,5 +1,4 @@
-use crate::app::InputState;
-use crate::scene::{build_instances, Camera, CameraController, Instance, Light};
+use crate::scene::{Camera, CameraActionState, CameraController, Instance, Light, build_instances};
 use std::time::Duration;
 
 pub struct Scene {
@@ -28,11 +27,13 @@ impl Scene {
         self.camera.resize(width, height);
     }
 
-    pub fn update(&mut self, dt: Duration, input: &InputState) {
-        self.camera_controller.update_camera(&mut self.camera, input, dt);
+    pub fn update(&mut self, dt: Duration, actions: &CameraActionState) {
+        self.camera_controller
+            .update_camera(&mut self.camera, actions, dt);
 
         let rotation_speed = 60.0_f32.to_radians();
-        let rotation = glam::Quat::from_axis_angle(glam::Vec3::Y, rotation_speed * dt.as_secs_f32());
+        let rotation =
+            glam::Quat::from_axis_angle(glam::Vec3::Y, rotation_speed * dt.as_secs_f32());
         self.light.position = rotation * self.light.position;
     }
 }

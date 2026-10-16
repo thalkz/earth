@@ -1,4 +1,4 @@
-use crate::app::{Action, Clock, InputState, State};
+use crate::app::{Clock, InputState, State};
 use std::sync::Arc;
 use winit::event_loop::EventLoop;
 use winit::{
@@ -76,7 +76,7 @@ impl ApplicationHandler for App {
                 ..
             } => {
                 self.input.update_key(code, key_state.is_pressed());
-                if self.input.is_active(Action::Exit) {
+                if self.input.is_exit_pressed() {
                     event_loop.exit();
                 }
             }

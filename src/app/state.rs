@@ -55,6 +55,6 @@ impl State {
     }
 
     pub fn update(&mut self, dt: Duration, input: &InputState) {
-        self.scene.update(dt, input);
+        self.scene.update(dt, &input.into());
     }
 }

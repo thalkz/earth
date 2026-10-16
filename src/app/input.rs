@@ -1,14 +1,6 @@
+use crate::scene::{CameraAction, CameraActionState};
 use std::collections::HashSet;
 use winit::keyboard::KeyCode;
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub enum Action {
-    MoveForward,
-    MoveBackward,
-    MoveLeft,
-    MoveRight,
-    Exit,
-}
 
 #[derive(Debug, Clone, Default)]
 pub struct InputState {
@@ -34,21 +26,30 @@ impl InputState {
         self.pressed_keys.contains(&code)
     }
 
-    pub fn is_active(&self, action: Action) -> bool {
-        match action {
-            Action::MoveForward => {
-                self.is_key_pressed(KeyCode::KeyW) || self.is_key_pressed(KeyCode::ArrowUp)
-            }
-            Action::MoveBackward => {
-                self.is_key_pressed(KeyCode::KeyS) || self.is_key_pressed(KeyCode::ArrowDown)
-            }
-            Action::MoveLeft => {
-                self.is_key_pressed(KeyCode::KeyA) || self.is_key_pressed(KeyCode::ArrowLeft)
-            }
-            Action::MoveRight => {
-                self.is_key_pressed(KeyCode::KeyD) || self.is_key_pressed(KeyCode::ArrowRight)
-            }
-            Action::Exit => self.is_key_pressed(KeyCode::Escape),
-        }
+    pub fn is_exit_pressed(&self) -> bool {
+        self.is_key_pressed(KeyCode::Escape)
+    }
+}
+
+impl From<&InputState> for CameraActionState {
+    fn from(value: &InputState) -> Self {
+        // TODO(thalkz) avoid allocating a new hashmap every frame
+        let actions = value
+            .pressed_keys
+            .iter()
+            .copied()
+            .filter_map(to_action)
+            .collect();
+        CameraActionState { actions }
+    }
+}
+
+fn to_action(key: KeyCode) -> Option<CameraAction> {
+    match key {
+        KeyCode::KeyW | KeyCode::ArrowUp => Some(CameraAction::MoveForward),
+        KeyCode::KeyS | KeyCode::ArrowDown => Some(CameraAction::MoveBackward),
+        KeyCode::KeyA | KeyCode::ArrowLeft => Some(CameraAction::MoveLeft),
+        KeyCode::KeyD | KeyCode::ArrowRight => Some(CameraAction::MoveRight),
+        _ => None,
     }
 }
