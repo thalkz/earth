@@ -1,26 +1,25 @@
 use crate::assets::ModelHandle;
-use crate::scene::{Camera, CameraActionState, CameraController, Instance, Light, build_instances};
+use crate::scene::{Camera, CameraActionState, CameraController, Light};
 use std::time::Duration;
 
 pub struct Scene {
     pub camera: Camera,
     pub camera_controller: CameraController,
     pub light: Light,
-    pub instances: Vec<Instance>,
+    pub earth: ModelHandle,
 }
 
 impl Scene {
-    pub fn new(width: u32, height: u32, model: ModelHandle) -> Self {
+    pub fn new(width: u32, height: u32, earth: ModelHandle) -> Self {
         let camera = Camera::new(width, height);
-        let camera_controller = CameraController::new(4.0);
+        let camera_controller = CameraController::new(10.0);
         let light = Light::new(glam::vec3(2.0, 2.0, 2.0), glam::vec3(1.0, 1.0, 1.0));
-        let instances = build_instances(model);
 
         Self {
             camera,
             camera_controller,
             light,
-            instances,
+            earth,
         }
     }
 
@@ -35,6 +34,6 @@ impl Scene {
         let rotation_speed = 60.0_f32.to_radians();
         let rotation =
             glam::Quat::from_axis_angle(glam::Vec3::Y, rotation_speed * dt.as_secs_f32());
-        self.light.position = rotation * self.light.position;
+        self.light.direction = (rotation * self.light.direction).normalize();
     }
 }

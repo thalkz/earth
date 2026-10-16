@@ -3,18 +3,16 @@ use std::collections::HashMap;
 use super::model::GpuModel;
 use crate::assets::{AssetServer, ModelHandle};
 use crate::gpu::{GpuContext, SurfaceHandler};
-use crate::renderer::{ForwardPass, GizmoPass, InstanceRaw};
+use crate::renderer::ForwardPass;
 use crate::scene::{CameraUniform, Scene};
 use wgpu::util::DeviceExt;
 
 pub struct Renderer {
     forward_pass: ForwardPass,
-    gizmo_pass: GizmoPass,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
     light_buffer: wgpu::Buffer,
     light_bind_group: wgpu::BindGroup,
-    instance_buffer: wgpu::Buffer,
     texture_bind_group_layout: wgpu::BindGroupLayout,
     gpu_models: HashMap<ModelHandle, GpuModel>,
 }
@@ -48,7 +46,7 @@ impl Renderer {
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[wgpu::BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                    visibility: wgpu::ShaderStages::VERTEX,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
@@ -63,7 +61,7 @@ impl Renderer {
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[wgpu::BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
@@ -78,13 +76,6 @@ impl Renderer {
             device,
             color_format,
             &texture_bind_group_layout,
-            &camera_bind_group_layout,
-            &light_bind_group_layout,
-        );
-
-        let gizmo_pass = GizmoPass::new(
-            device,
-            color_format,
             &camera_bind_group_layout,
             &light_bind_group_layout,
         );
@@ -105,7 +96,7 @@ impl Renderer {
             label: Some("camera_bind_group"),
         });
 
-        let light_uniform = crate::scene::LightUniform::new([0.0; 3], [1.0; 3]);
+        let light_uniform = crate::scene::LightUniform::new([1.0, 0.0, 0.0], [1.0; 3]);
         let light_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Light Buffer"),
             contents: bytemuck::cast_slice(&[light_uniform]),
@@ -121,21 +112,12 @@ impl Renderer {
             label: Some("light_bind_group"),
         });
 
-        let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Instance Buffer"),
-            size: std::mem::size_of::<InstanceRaw>() as u64,
-            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
         Self {
             forward_pass,
-            gizmo_pass,
             camera_buffer,
             camera_bind_group,
             light_buffer,
             light_bind_group,
-            instance_buffer,
             texture_bind_group_layout,
             gpu_models: HashMap::new(),
         }
@@ -157,26 +139,16 @@ impl Renderer {
             bytemuck::cast_slice(&[light_uniform]),
         );
 
-        let instance_data: Vec<InstanceRaw> = scene.instances.iter().map(|i| i.into()).collect();
-        self.instance_buffer = gpu
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Instance Buffer"),
-                contents: bytemuck::cast_slice(&instance_data),
-                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-            });
-
-        for instance in &scene.instances {
-            if let std::collections::hash_map::Entry::Vacant(entry) = self.gpu_models.entry(instance.model) {
-                if let Some(cpu_model) = assets.get_model(instance.model) {
-                    let gpu_model = GpuModel::from_cpu_model(
-                        &gpu.device,
-                        &gpu.queue,
-                        &self.texture_bind_group_layout,
-                        cpu_model,
-                    );
-                    entry.insert(gpu_model);
-                }
+        if let std::collections::hash_map::Entry::Vacant(entry) = self.gpu_models.entry(scene.earth)
+        {
+            if let Some(cpu_model) = assets.get_model(scene.earth) {
+                let gpu_model = GpuModel::from_cpu_model(
+                    &gpu.device,
+                    &gpu.queue,
+                    &self.texture_bind_group_layout,
+                    cpu_model,
+                );
+                entry.insert(gpu_model);
             }
         }
     }
@@ -232,24 +204,11 @@ impl Renderer {
                 multiview_mask: None,
             });
 
-            render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
-
-            if let Some(gpu_model) = scene
-                .instances
-                .first()
-                .and_then(|i| self.gpu_models.get(&i.model))
-            {
-                self.gizmo_pass.draw(
-                    &mut render_pass,
-                    gpu_model,
-                    &self.camera_bind_group,
-                    &self.light_bind_group,
-                );
-
+            if let Some(earth_gpu) = self.gpu_models.get(&scene.earth) {
                 self.forward_pass.draw(
                     &mut render_pass,
-                    gpu_model,
-                    0..scene.instances.len() as u32,
+                    earth_gpu,
+                    0..1 as u32,
                     &self.camera_bind_group,
                     &self.light_bind_group,
                 );
