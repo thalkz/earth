@@ -12,14 +12,8 @@ impl AssetServer {
         Self { models: Vec::new() }
     }
 
-    pub async fn load_model(
-        &mut self,
-        file_name: &str,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        layout: &wgpu::BindGroupLayout,
-    ) -> anyhow::Result<ModelHandle> {
-        let model = load_model(file_name, device, queue, layout).await?;
+    pub async fn load_model(&mut self, file_name: &str) -> anyhow::Result<ModelHandle> {
+        let model = load_model(file_name).await?;
         let handle = ModelHandle(self.models.len());
         self.models.push(model);
         Ok(handle)

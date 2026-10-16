@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use crate::assets::{Model, ModelVertex, Vertex};
+use super::model::{model_vertex_layout, GpuModel};
 use crate::gpu::{create_render_pipeline, Texture};
 use crate::scene::Instance;
 use wgpu::BufferAddress;
@@ -85,7 +85,7 @@ impl ForwardPass {
             &render_pipeline_layout,
             color_format,
             Some(Texture::DEPTH_FORMAT),
-            &[Some(ModelVertex::desc()), Some(InstanceRaw::desc())],
+            &[Some(model_vertex_layout()), Some(InstanceRaw::desc())],
             shader,
         );
 
@@ -95,7 +95,7 @@ impl ForwardPass {
     pub fn draw<'a>(
         &'a self,
         render_pass: &mut wgpu::RenderPass<'a>,
-        model: &'a Model,
+        model: &'a GpuModel,
         instances: Range<u32>,
         camera_bind_group: &'a wgpu::BindGroup,
         light_bind_group: &'a wgpu::BindGroup,

@@ -1,4 +1,4 @@
-use crate::assets::{Model, ModelVertex, Vertex};
+use super::model::{model_vertex_layout, GpuModel};
 use crate::gpu::{create_render_pipeline, Texture};
 
 pub struct GizmoPass {
@@ -29,7 +29,7 @@ impl GizmoPass {
             &layout,
             color_format,
             Some(Texture::DEPTH_FORMAT),
-            &[Some(ModelVertex::desc())],
+            &[Some(model_vertex_layout())],
             shader,
         );
 
@@ -39,7 +39,7 @@ impl GizmoPass {
     pub fn draw<'a>(
         &'a self,
         render_pass: &mut wgpu::RenderPass<'a>,
-        model: &'a Model,
+        model: &'a GpuModel,
         camera_bind_group: &'a wgpu::BindGroup,
         light_bind_group: &'a wgpu::BindGroup,
     ) {

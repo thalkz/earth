@@ -1,6 +1,3 @@
-use anyhow::*;
-use image::GenericImageView;
-
 pub struct Texture {
     #[allow(unused)]
     pub texture: wgpu::Texture,
@@ -11,28 +8,18 @@ pub struct Texture {
 impl Texture {
     pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
-    pub fn from_bytes(
+    pub fn create_2d(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        bytes: &[u8],
-        label: &str,
-    ) -> Result<Self> {
-        let img = image::load_from_memory(bytes)?;
-        Self::from_image(device, queue, &img, Some(label))
-    }
-
-    pub fn from_image(
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        img: &image::DynamicImage,
+        width: u32,
+        height: u32,
+        format: wgpu::TextureFormat,
+        data: &[u8],
         label: Option<&str>,
-    ) -> Result<Self> {
-        let rgba = img.to_rgba8();
-        let dimensions = img.dimensions();
-
+    ) -> Self {
         let size = wgpu::Extent3d {
-            width: dimensions.0,
-            height: dimensions.1,
+            width,
+            height,
             depth_or_array_layers: 1,
         };
         let texture = device.create_texture(&wgpu::TextureDescriptor {
@@ -41,10 +28,12 @@ impl Texture {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            format,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
+
+        let bytes_per_pixel = format.block_copy_size(None).unwrap_or(4);
 
         queue.write_texture(
             wgpu::TexelCopyTextureInfo {
@@ -53,11 +42,11 @@ impl Texture {
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
             },
-            &rgba,
+            data,
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
-                bytes_per_row: Some(4 * dimensions.0),
-                rows_per_image: Some(dimensions.1),
+                bytes_per_row: Some(bytes_per_pixel * width),
+                rows_per_image: Some(height),
             },
             size,
         );
@@ -73,11 +62,11 @@ impl Texture {
             ..Default::default()
         });
 
-        Ok(Self {
+        Self {
             texture,
             view,
             sampler,
-        })
+        }
     }
 
     pub fn create_depth_texture(

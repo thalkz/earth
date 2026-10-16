@@ -23,17 +23,10 @@ impl State {
         let mut renderer = Renderer::new(&gpu.device, surface.config.format);
         let mut assets = AssetServer::new();
 
-        let cube_handle = assets
-            .load_model(
-                "cube.obj",
-                &gpu.device,
-                &gpu.queue,
-                &renderer.texture_bind_group_layout,
-            )
-            .await?;
+        let cube_handle = assets.load_model("cube.obj").await?;
 
         let scene = Scene::new(surface.config.width, surface.config.height, cube_handle);
-        renderer.prepare(&gpu, &scene);
+        renderer.prepare(&gpu, &scene, &assets);
 
         Ok(Self {
             window,
@@ -52,7 +45,7 @@ impl State {
 
     pub fn render(&mut self) -> anyhow::Result<()> {
         self.window.request_redraw();
-        self.renderer.prepare(&self.gpu, &self.scene);
+        self.renderer.prepare(&self.gpu, &self.scene, &self.assets);
         self.renderer
             .render(&self.gpu, &mut self.surface, &self.scene, &self.assets)
     }

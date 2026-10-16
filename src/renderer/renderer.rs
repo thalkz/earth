@@ -1,4 +1,7 @@
-use crate::assets::AssetServer;
+use std::collections::HashMap;
+
+use super::model::GpuModel;
+use crate::assets::{AssetServer, ModelHandle};
 use crate::gpu::{GpuContext, SurfaceHandler};
 use crate::renderer::{ForwardPass, GizmoPass, InstanceRaw};
 use crate::scene::{CameraUniform, Scene};
@@ -12,7 +15,8 @@ pub struct Renderer {
     light_buffer: wgpu::Buffer,
     light_bind_group: wgpu::BindGroup,
     instance_buffer: wgpu::Buffer,
-    pub texture_bind_group_layout: wgpu::BindGroupLayout,
+    texture_bind_group_layout: wgpu::BindGroupLayout,
+    gpu_models: HashMap<ModelHandle, GpuModel>,
 }
 
 impl Renderer {
@@ -133,10 +137,11 @@ impl Renderer {
             light_bind_group,
             instance_buffer,
             texture_bind_group_layout,
+            gpu_models: HashMap::new(),
         }
     }
 
-    pub fn prepare(&mut self, gpu: &GpuContext, scene: &Scene) {
+    pub fn prepare(&mut self, gpu: &GpuContext, scene: &Scene, assets: &AssetServer) {
         let mut camera_uniform = CameraUniform::new();
         camera_uniform.update_view_proj(&scene.camera);
         gpu.queue.write_buffer(
@@ -160,6 +165,20 @@ impl Renderer {
                 contents: bytemuck::cast_slice(&instance_data),
                 usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             });
+
+        for instance in &scene.instances {
+            if let std::collections::hash_map::Entry::Vacant(entry) = self.gpu_models.entry(instance.model) {
+                if let Some(cpu_model) = assets.get_model(instance.model) {
+                    let gpu_model = GpuModel::from_cpu_model(
+                        &gpu.device,
+                        &gpu.queue,
+                        &self.texture_bind_group_layout,
+                        cpu_model,
+                    );
+                    entry.insert(gpu_model);
+                }
+            }
+        }
     }
 
     pub fn render(
@@ -167,7 +186,7 @@ impl Renderer {
         gpu: &GpuContext,
         surface: &mut SurfaceHandler,
         scene: &Scene,
-        assets: &AssetServer,
+        _assets: &AssetServer,
     ) -> anyhow::Result<()> {
         let Some(output) = surface.get_current_texture(&gpu.device)? else {
             return Ok(());
@@ -215,21 +234,21 @@ impl Renderer {
 
             render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
 
-            if let Some(model) = scene
+            if let Some(gpu_model) = scene
                 .instances
                 .first()
-                .and_then(|i| assets.get_model(i.model))
+                .and_then(|i| self.gpu_models.get(&i.model))
             {
                 self.gizmo_pass.draw(
                     &mut render_pass,
-                    model,
+                    gpu_model,
                     &self.camera_bind_group,
                     &self.light_bind_group,
                 );
 
                 self.forward_pass.draw(
                     &mut render_pass,
-                    model,
+                    gpu_model,
                     0..scene.instances.len() as u32,
                     &self.camera_bind_group,
                     &self.light_bind_group,
