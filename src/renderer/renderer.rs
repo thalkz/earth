@@ -12,7 +12,6 @@ pub struct Renderer {
     light_buffer: wgpu::Buffer,
     light_bind_group: wgpu::BindGroup,
     instance_buffer: wgpu::Buffer,
-    instance_count: u32,
     pub texture_bind_group_layout: wgpu::BindGroupLayout,
 }
 
@@ -124,7 +123,6 @@ impl Renderer {
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        let instance_count = 0;
 
         Self {
             forward_pass,
@@ -134,7 +132,6 @@ impl Renderer {
             light_buffer,
             light_bind_group,
             instance_buffer,
-            instance_count,
             texture_bind_group_layout,
         }
     }
@@ -156,22 +153,13 @@ impl Renderer {
         );
 
         let instance_data: Vec<InstanceRaw> = scene.instances.iter().map(|i| i.into()).collect();
-        if !instance_data.is_empty() && (instance_data.len() as u32) <= self.instance_count {
-            gpu.queue.write_buffer(
-                &self.instance_buffer,
-                0,
-                bytemuck::cast_slice(&instance_data),
-            );
-        } else if !instance_data.is_empty() {
-            self.instance_buffer =
-                gpu.device
-                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("Instance Buffer"),
-                        contents: bytemuck::cast_slice(&instance_data),
-                        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-                    });
-            self.instance_count = instance_data.len() as u32;
-        }
+        self.instance_buffer = gpu
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Instance Buffer"),
+                contents: bytemuck::cast_slice(&instance_data),
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            });
     }
 
     pub fn render(
@@ -227,7 +215,11 @@ impl Renderer {
 
             render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
 
-            if let Some(model) = scene.instances.first().and_then(|i| assets.get_model(i.model)) {
+            if let Some(model) = scene
+                .instances
+                .first()
+                .and_then(|i| assets.get_model(i.model))
+            {
                 self.gizmo_pass.draw(
                     &mut render_pass,
                     model,
