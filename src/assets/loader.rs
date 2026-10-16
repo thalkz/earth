@@ -107,7 +107,7 @@ pub async fn load_model(file_name: &str) -> anyhow::Result<Model> {
                 name: m.name,
                 vertices,
                 indices: m.mesh.indices,
-                material: m.mesh.material_id.unwrap_or(0),
+                material_index: m.mesh.material_id.unwrap_or(0),
             }
         })
         .collect::<Vec<_>>();

@@ -1,5 +1,5 @@
 use crate::app::InputState;
-use crate::assets::AssetServer;
+use crate::assets::{self};
 use crate::gpu::{GpuContext, SurfaceHandler};
 use crate::renderer::Renderer;
 use crate::scene::Scene;
@@ -13,7 +13,6 @@ pub struct State {
     surface: SurfaceHandler,
     renderer: Renderer,
     scene: Scene,
-    assets: AssetServer,
 }
 
 impl State {
@@ -21,12 +20,11 @@ impl State {
         let (gpu, surface) = GpuContext::init_window(window.clone()).await?;
 
         let mut renderer = Renderer::new(&gpu.device, surface.config.format);
-        let mut assets = AssetServer::new();
 
-        let cube_handle = assets.load_model("cube.obj").await?;
+        let earth_model = assets::load_model("cube.obj").await?;
 
-        let scene = Scene::new(surface.config.width, surface.config.height, cube_handle);
-        renderer.prepare(&gpu, &scene, &assets);
+        let scene = Scene::new(surface.config.width, surface.config.height, earth_model);
+        renderer.prepare(&gpu, &scene);
 
         Ok(Self {
             window,
@@ -34,7 +32,6 @@ impl State {
             surface,
             renderer,
             scene,
-            assets,
         })
     }
 
@@ -45,9 +42,9 @@ impl State {
 
     pub fn render(&mut self) -> anyhow::Result<()> {
         self.window.request_redraw();
-        self.renderer.prepare(&self.gpu, &self.scene, &self.assets);
+        self.renderer.prepare(&self.gpu, &self.scene);
         self.renderer
-            .render(&self.gpu, &mut self.surface, &self.scene, &self.assets)
+            .render(&self.gpu, &mut self.surface, &self.scene)
     }
 
     pub fn update(&mut self, dt: Duration, input: &InputState) {

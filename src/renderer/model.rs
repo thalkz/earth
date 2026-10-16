@@ -8,19 +8,13 @@ pub struct GpuModel {
 }
 
 pub struct GpuMesh {
-    #[allow(dead_code)]
-    pub name: String,
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,
     pub num_elements: u32,
-    pub material: usize,
+    pub material_index: usize,
 }
 
 pub struct GpuMaterial {
-    #[allow(dead_code)]
-    pub name: String,
-    #[allow(dead_code)]
-    pub texture: Texture,
     pub bind_group: wgpu::BindGroup,
 }
 
@@ -60,11 +54,7 @@ impl GpuModel {
                     label: Some(&format!("Material Bind Group {}", mat.name)),
                 });
 
-                GpuMaterial {
-                    name: mat.name.clone(),
-                    texture,
-                    bind_group,
-                }
+                GpuMaterial { bind_group }
             })
             .collect();
 
@@ -84,11 +74,10 @@ impl GpuModel {
                 });
 
                 GpuMesh {
-                    name: mesh.name.clone(),
                     vertex_buffer,
                     index_buffer,
                     num_elements: mesh.indices.len() as u32,
-                    material: mesh.material,
+                    material_index: mesh.material_index,
                 }
             })
             .collect();

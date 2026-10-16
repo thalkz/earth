@@ -1,9 +1,6 @@
-use std::collections::HashMap;
-
-use super::model::GpuModel;
-use crate::assets::{AssetServer, ModelHandle};
 use crate::gpu::{GpuContext, SurfaceHandler};
 use crate::renderer::ForwardPass;
+use crate::renderer::model::GpuModel;
 use crate::scene::{CameraUniform, Scene};
 use wgpu::util::DeviceExt;
 
@@ -14,7 +11,6 @@ pub struct Renderer {
     light_buffer: wgpu::Buffer,
     light_bind_group: wgpu::BindGroup,
     texture_bind_group_layout: wgpu::BindGroupLayout,
-    gpu_models: HashMap<ModelHandle, GpuModel>,
 }
 
 impl Renderer {
@@ -119,11 +115,10 @@ impl Renderer {
             light_buffer,
             light_bind_group,
             texture_bind_group_layout,
-            gpu_models: HashMap::new(),
         }
     }
 
-    pub fn prepare(&mut self, gpu: &GpuContext, scene: &Scene, assets: &AssetServer) {
+    pub fn prepare(&mut self, gpu: &GpuContext, scene: &Scene) {
         let mut camera_uniform = CameraUniform::new();
         camera_uniform.update_view_proj(&scene.camera);
         gpu.queue.write_buffer(
@@ -138,19 +133,6 @@ impl Renderer {
             0,
             bytemuck::cast_slice(&[light_uniform]),
         );
-
-        if let std::collections::hash_map::Entry::Vacant(entry) = self.gpu_models.entry(scene.earth)
-        {
-            if let Some(cpu_model) = assets.get_model(scene.earth) {
-                let gpu_model = GpuModel::from_cpu_model(
-                    &gpu.device,
-                    &gpu.queue,
-                    &self.texture_bind_group_layout,
-                    cpu_model,
-                );
-                entry.insert(gpu_model);
-            }
-        }
     }
 
     pub fn render(
@@ -158,7 +140,6 @@ impl Renderer {
         gpu: &GpuContext,
         surface: &mut SurfaceHandler,
         scene: &Scene,
-        _assets: &AssetServer,
     ) -> anyhow::Result<()> {
         let Some(output) = surface.get_current_texture(&gpu.device)? else {
             return Ok(());
@@ -204,15 +185,20 @@ impl Renderer {
                 multiview_mask: None,
             });
 
-            if let Some(earth_gpu) = self.gpu_models.get(&scene.earth) {
-                self.forward_pass.draw(
-                    &mut render_pass,
-                    earth_gpu,
-                    0..1 as u32,
-                    &self.camera_bind_group,
-                    &self.light_bind_group,
-                );
-            }
+            let earth_gpu = GpuModel::from_cpu_model(
+                &gpu.device,
+                &gpu.queue,
+                &self.texture_bind_group_layout,
+                &scene.earth,
+            );
+
+            self.forward_pass.draw(
+                &mut render_pass,
+                &earth_gpu,
+                0..1 as u32,
+                &self.camera_bind_group,
+                &self.light_bind_group,
+            );
         }
 
         gpu.queue.submit(std::iter::once(encoder.finish()));

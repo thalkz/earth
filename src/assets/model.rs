@@ -9,7 +9,7 @@ pub struct Mesh {
     pub name: String,
     pub vertices: Vec<Vertex>,
     pub indices: Vec<u32>,
-    pub material: usize,
+    pub material_index: usize,
 }
 
 #[derive(Clone, Debug)]
