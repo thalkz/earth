@@ -1,7 +1,7 @@
 use std::ops::Range;
 
 use crate::assets::{DrawModel, Model, ModelVertex, Vertex};
-use crate::gpu::{create_render_pipeline, Texture};
+use crate::gpu::{Texture, create_render_pipeline};
 use crate::instance::InstanceRaw;
 
 pub struct ForwardPass {
@@ -29,7 +29,7 @@ impl ForwardPass {
 
         let shader = wgpu::ShaderModuleDescriptor {
             label: Some("Forward Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("../../shader.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(include_str!("forward.wgsl").into()),
         };
 
         let pipeline = create_render_pipeline(

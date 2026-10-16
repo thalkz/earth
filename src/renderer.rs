@@ -1,21 +1,33 @@
-mod passes;
+mod forward_pass;
+mod gizmo_pass;
 
-pub use passes::{ForwardPass, GizmoPass};
+pub use forward_pass::ForwardPass;
+pub use gizmo_pass::GizmoPass;
 
 use crate::assets::Model;
 use crate::gpu::{GpuContext, SurfaceHandler};
-use crate::scene::Scene;
+use crate::instance::{Instance, InstanceRaw};
+use crate::scene::{CameraUniform, Scene};
+use wgpu::util::DeviceExt;
 
 pub struct Renderer {
     forward_pass: ForwardPass,
     gizmo_pass: GizmoPass,
-    pub camera_bind_group_layout: wgpu::BindGroupLayout,
-    pub light_bind_group_layout: wgpu::BindGroupLayout,
+    camera_buffer: wgpu::Buffer,
+    camera_bind_group: wgpu::BindGroup,
+    light_buffer: wgpu::Buffer,
+    light_bind_group: wgpu::BindGroup,
+    instance_buffer: wgpu::Buffer,
+    instance_count: u32,
     pub texture_bind_group_layout: wgpu::BindGroupLayout,
 }
 
 impl Renderer {
-    pub fn new(device: &wgpu::Device, color_format: wgpu::TextureFormat) -> Self {
+    pub fn new(
+        device: &wgpu::Device,
+        color_format: wgpu::TextureFormat,
+        initial_instances: &[Instance],
+    ) -> Self {
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[
@@ -84,12 +96,91 @@ impl Renderer {
             &light_bind_group_layout,
         );
 
+        let camera_uniform = CameraUniform::new();
+        let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Camera Buffer"),
+            contents: bytemuck::cast_slice(&[camera_uniform]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &camera_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: camera_buffer.as_entire_binding(),
+            }],
+            label: Some("camera_bind_group"),
+        });
+
+        let light_uniform = crate::scene::LightUniform::new([0.0; 3], [1.0; 3]);
+        let light_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Light Buffer"),
+            contents: bytemuck::cast_slice(&[light_uniform]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let light_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &light_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: light_buffer.as_entire_binding(),
+            }],
+            label: Some("light_bind_group"),
+        });
+
+        let instance_data: Vec<InstanceRaw> = initial_instances.iter().map(|i| i.into()).collect();
+        let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Instance Buffer"),
+            contents: bytemuck::cast_slice(&instance_data),
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        });
+        let instance_count = instance_data.len() as u32;
+
         Self {
             forward_pass,
             gizmo_pass,
-            camera_bind_group_layout,
-            light_bind_group_layout,
+            camera_buffer,
+            camera_bind_group,
+            light_buffer,
+            light_bind_group,
+            instance_buffer,
+            instance_count,
             texture_bind_group_layout,
+        }
+    }
+
+    pub fn prepare(&mut self, gpu: &GpuContext, scene: &Scene) {
+        let mut camera_uniform = CameraUniform::new();
+        camera_uniform.update_view_proj(&scene.camera);
+        gpu.queue.write_buffer(
+            &self.camera_buffer,
+            0,
+            bytemuck::cast_slice(&[camera_uniform]),
+        );
+
+        let light_uniform = scene.light.to_uniform();
+        gpu.queue.write_buffer(
+            &self.light_buffer,
+            0,
+            bytemuck::cast_slice(&[light_uniform]),
+        );
+
+        let instance_data: Vec<InstanceRaw> = scene.instances.iter().map(|i| i.into()).collect();
+        if (instance_data.len() as u32) <= self.instance_count {
+            gpu.queue.write_buffer(
+                &self.instance_buffer,
+                0,
+                bytemuck::cast_slice(&instance_data),
+            );
+        } else {
+            self.instance_buffer =
+                gpu.device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("Instance Buffer"),
+                        contents: bytemuck::cast_slice(&instance_data),
+                        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                    });
+            self.instance_count = instance_data.len() as u32;
         }
     }
 
@@ -99,9 +190,6 @@ impl Renderer {
         surface: &mut SurfaceHandler,
         scene: &Scene,
         model: &Model,
-        camera_bind_group: &wgpu::BindGroup,
-        light_bind_group: &wgpu::BindGroup,
-        instance_buffer: &wgpu::Buffer,
     ) -> anyhow::Result<()> {
         let Some(output) = surface.get_current_texture(&gpu.device)? else {
             return Ok(());
@@ -147,17 +235,21 @@ impl Renderer {
                 multiview_mask: None,
             });
 
-            render_pass.set_vertex_buffer(1, instance_buffer.slice(..));
+            render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
 
-            self.gizmo_pass
-                .draw(&mut render_pass, model, camera_bind_group, light_bind_group);
+            self.gizmo_pass.draw(
+                &mut render_pass,
+                model,
+                &self.camera_bind_group,
+                &self.light_bind_group,
+            );
 
             self.forward_pass.draw(
                 &mut render_pass,
                 model,
                 0..scene.instances.len() as u32,
-                camera_bind_group,
-                light_bind_group,
+                &self.camera_bind_group,
+                &self.light_bind_group,
             );
         }
 

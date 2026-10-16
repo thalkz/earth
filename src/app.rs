@@ -57,7 +57,7 @@ impl ApplicationHandler<State> for App {
         event: WindowEvent,
     ) {
         let state = match &mut self.state {
-            Some(canvas) => canvas,
+            Some(state) => state,
             None => return,
         };
 

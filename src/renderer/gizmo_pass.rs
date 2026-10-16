@@ -1,5 +1,5 @@
 use crate::assets::{DrawGizmo, Model, ModelVertex, Vertex};
-use crate::gpu::{create_render_pipeline, Texture};
+use crate::gpu::{Texture, create_render_pipeline};
 
 pub struct GizmoPass {
     pub pipeline: wgpu::RenderPipeline,
@@ -14,16 +14,13 @@ impl GizmoPass {
     ) -> Self {
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Gizmo Pipeline Layout"),
-            bind_group_layouts: &[
-                Some(camera_layout),
-                Some(light_layout),
-            ],
+            bind_group_layouts: &[Some(camera_layout), Some(light_layout)],
             immediate_size: 0,
         });
 
         let shader = wgpu::ShaderModuleDescriptor {
             label: Some("Gizmo Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("../../gizmo.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(include_str!("gizmo.wgsl").into()),
         };
 
         let pipeline = create_render_pipeline(
