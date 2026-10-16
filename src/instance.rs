@@ -1,12 +1,13 @@
+use glam::{Mat4, Quat, Vec3};
 use wgpu::BufferAddress;
 
 pub struct Instance {
-    position: cgmath::Vector3<f32>,
-    rotation: cgmath::Quaternion<f32>,
+    pub position: Vec3,
+    pub rotation: Quat,
 }
 
 impl Instance {
-    pub fn new(position: cgmath::Vector3<f32>, rotation: cgmath::Quaternion<f32>) -> Instance {
+    pub fn new(position: Vec3, rotation: Quat) -> Instance {
         Instance { position, rotation }
     }
 }
@@ -51,10 +52,9 @@ impl InstanceRaw {
 
 impl From<&Instance> for InstanceRaw {
     fn from(value: &Instance) -> Self {
-        let model = cgmath::Matrix4::from_translation(value.position)
-            * cgmath::Matrix4::from(value.rotation);
+        let model = Mat4::from_rotation_translation(value.rotation, value.position);
         InstanceRaw {
-            model: model.into(),
+            model: model.to_cols_array_2d(),
         }
     }
 }

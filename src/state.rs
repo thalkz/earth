@@ -276,6 +276,7 @@ impl State {
             self.config.height = height;
             self.surface.configure(&self.device, &self.config);
             self.is_surface_configured = true;
+            self.camera.resize(width, height);
         }
         self.depth_texture =
             texture::Texture::create_depth_texture(&self.device, &self.config, "depth_texture");
@@ -382,12 +383,9 @@ impl State {
             bytemuck::cast_slice(&[self.camera_uniform]),
         );
 
-        let old_position: cgmath::Vector3<f32> = self.light_uniform.position.into();
-        use cgmath::prelude::*;
-        self.light_uniform.position =
-            (cgmath::Quaternion::from_axis_angle((0.0, 1.0, 0.0).into(), cgmath::Deg(1.0))
-                * old_position)
-                .into();
+        let old_position = glam::Vec3::from_array(self.light_uniform.position);
+        let rotation = glam::Quat::from_axis_angle(glam::Vec3::Y, 1.0_f32.to_radians());
+        self.light_uniform.position = (rotation * old_position).to_array();
         self.queue.write_buffer(
             &self.light_buffer,
             0,
