@@ -1,9 +1,9 @@
 use crate::app::InputState;
-use crate::data::build_instances;
-use crate::gpu::{GpuContext, SurfaceHandler, Texture, create_render_pipeline};
+use crate::gpu::{create_render_pipeline, GpuContext, SurfaceHandler, Texture};
 use crate::instance::InstanceRaw;
 use crate::model::Vertex;
-use crate::{camera, instance, light, model, resources};
+use crate::scene::{CameraUniform, LightUniform, Scene};
+use crate::{model, resources};
 use std::sync::Arc;
 use std::time::Duration;
 use wgpu::util::DeviceExt;
@@ -14,15 +14,13 @@ pub struct State {
     gpu: GpuContext,
     surface: SurfaceHandler,
     render_pipeline: wgpu::RenderPipeline,
-    camera: camera::Camera,
-    camera_uniform: camera::CameraUniform,
+    scene: Scene,
+    camera_uniform: CameraUniform,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
-    camera_controller: camera::CameraController,
-    instances: Vec<instance::Instance>,
     instance_buffer: wgpu::Buffer,
     obj_model: model::Model,
-    light_uniform: light::LightUniform,
+    light_uniform: LightUniform,
     light_buffer: wgpu::Buffer,
     light_bind_group: wgpu::BindGroup,
     light_render_pipeline: wgpu::RenderPipeline,
@@ -31,6 +29,8 @@ pub struct State {
 impl State {
     pub async fn new(window: Arc<Window>) -> anyhow::Result<Self> {
         let (gpu, surface) = GpuContext::init_window(window.clone()).await?;
+
+        let scene = Scene::new(surface.config.width, surface.config.height);
 
         let texture_bind_group_layout =
             gpu.device
@@ -56,10 +56,8 @@ impl State {
                     label: Some("texture_bind_group_layout"),
                 });
 
-        let camera = camera::Camera::new(surface.config.width, surface.config.height);
-
-        let mut camera_uniform = camera::CameraUniform::new();
-        camera_uniform.update_view_proj(&camera);
+        let mut camera_uniform = CameraUniform::new();
+        camera_uniform.update_view_proj(&scene.camera);
         let camera_buffer = gpu
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -93,14 +91,12 @@ impl State {
             label: Some("camera_bind_group"),
         });
 
-        let camera_controller = camera::CameraController::new(4.0);
-
         let shader = wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
         };
 
-        let light_uniform = light::LightUniform::new([2.0, 2.0, 2.0], [1.0, 1.0, 1.0]);
+        let light_uniform = scene.light.to_uniform();
         let light_buffer = gpu
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -165,8 +161,7 @@ impl State {
         .await
         .unwrap();
 
-        let instances = build_instances();
-        let instance_data: Vec<InstanceRaw> = instances.iter().map(|i| i.into()).collect();
+        let instance_data: Vec<InstanceRaw> = scene.instances.iter().map(|i| i.into()).collect();
         let instance_buffer = gpu
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -206,12 +201,10 @@ impl State {
             gpu,
             surface,
             render_pipeline,
-            camera,
+            scene,
             camera_uniform,
             camera_buffer,
             camera_bind_group,
-            camera_controller,
-            instances,
             instance_buffer,
             obj_model,
             light_uniform,
@@ -223,7 +216,7 @@ impl State {
 
     pub fn resize(&mut self, width: u32, height: u32) {
         self.surface.resize(&self.gpu.device, width, height);
-        self.camera.resize(width, height);
+        self.scene.resize(width, height);
     }
 
     pub fn render(&mut self) -> anyhow::Result<()> {
@@ -287,7 +280,7 @@ impl State {
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.draw_model_instanced(
                 &self.obj_model,
-                0..self.instances.len() as u32,
+                0..self.scene.instances.len() as u32,
                 &self.camera_bind_group,
                 &self.light_bind_group,
             );
@@ -300,20 +293,16 @@ impl State {
     }
 
     pub fn update(&mut self, dt: Duration, input: &InputState) {
-        self.camera_controller
-            .update_camera(&mut self.camera, input, dt);
-        self.camera_uniform.update_view_proj(&self.camera);
+        self.scene.update(dt, input);
+
+        self.camera_uniform.update_view_proj(&self.scene.camera);
         self.gpu.queue.write_buffer(
             &self.camera_buffer,
             0,
             bytemuck::cast_slice(&[self.camera_uniform]),
         );
 
-        let old_position = glam::Vec3::from_array(self.light_uniform.position);
-        let rotation_speed = 60.0_f32.to_radians();
-        let rotation =
-            glam::Quat::from_axis_angle(glam::Vec3::Y, rotation_speed * dt.as_secs_f32());
-        self.light_uniform.position = (rotation * old_position).to_array();
+        self.light_uniform = self.scene.light.to_uniform();
         self.gpu.queue.write_buffer(
             &self.light_buffer,
             0,

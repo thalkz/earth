@@ -1,14 +1,21 @@
-use glam::{Mat4, Quat, Vec3};
+use crate::scene::Transform;
+use glam::{Quat, Vec3};
 use wgpu::BufferAddress;
 
 pub struct Instance {
-    pub position: Vec3,
-    pub rotation: Quat,
+    pub transform: Transform,
 }
 
 impl Instance {
     pub fn new(position: Vec3, rotation: Quat) -> Instance {
-        Instance { position, rotation }
+        Instance {
+            transform: Transform::from_rotation_translation(rotation, position),
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn from_transform(transform: Transform) -> Instance {
+        Instance { transform }
     }
 }
 
@@ -52,9 +59,8 @@ impl InstanceRaw {
 
 impl From<&Instance> for InstanceRaw {
     fn from(value: &Instance) -> Self {
-        let model = Mat4::from_rotation_translation(value.rotation, value.position);
         InstanceRaw {
-            model: model.to_cols_array_2d(),
+            model: value.transform.to_mat4().to_cols_array_2d(),
         }
     }
 }

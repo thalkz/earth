@@ -3,14 +3,13 @@ use winit::event_loop::EventLoop;
 use crate::app::App;
 
 mod app;
-mod camera;
 mod data;
+mod gpu;
 mod instance;
-mod light;
 mod model;
 mod resources;
+mod scene;
 mod state;
-mod gpu;
 
 pub fn run() -> anyhow::Result<()> {
     env_logger::init();
