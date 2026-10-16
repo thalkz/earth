@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use crate::texture;
+use crate::gpu::Texture;
 
 pub struct Model {
     pub meshes: Vec<Mesh>,
@@ -10,7 +10,7 @@ pub struct Model {
 #[allow(dead_code)]
 pub struct Material {
     pub name: String,
-    pub diffuse_texture: texture::Texture,
+    pub diffuse_texture: Texture,
     pub bind_group: wgpu::BindGroup,
 }
 

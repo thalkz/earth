@@ -312,7 +312,7 @@ impl ForwardPass {
 
 ## 7. Migration Checklist
 
-- [ ] **Decouple `State`:** Extract `GpuContext` and `SurfaceManager` from `State`.
+- [x] **Decouple `State`:** Extract `GpuContext` and `SurfaceManager` from `State`.
 - [ ] **Standardize Bind Group Frequencies:** Refactor `@group(...)` indices across `shader.wgsl` and `light.wgsl`.
 - [x] **Adopt `glam`:** Replace `cgmath` in `camera.rs` and `instance.rs` with `glam::Vec3`, `glam::Quat`, and `glam::Mat4`.
 - [x] **Frame Timing (`dt`):** Integrate high-precision delta time in `App::window_event` (`RedrawRequested`).

@@ -1,4 +1,4 @@
-use crate::{model, texture};
+use crate::{gpu::Texture, model};
 use std::{fs, io, path};
 use wgpu::util::DeviceExt;
 
@@ -26,9 +26,9 @@ pub async fn load_texture(
     file_name: &str,
     device: &wgpu::Device,
     queue: &wgpu::Queue,
-) -> anyhow::Result<texture::Texture> {
+) -> anyhow::Result<Texture> {
     let data = load_binary(file_name).await?;
-    texture::Texture::from_bytes(device, queue, &data, file_name)
+    Texture::from_bytes(device, queue, &data, file_name)
 }
 
 pub async fn load_model(

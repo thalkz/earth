@@ -10,7 +10,7 @@ mod light;
 mod model;
 mod resources;
 mod state;
-mod texture;
+mod gpu;
 
 pub fn run() -> anyhow::Result<()> {
     env_logger::init();
