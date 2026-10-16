@@ -1,4 +1,5 @@
-use crate::{gpu::Texture, model};
+use super::model::{Material, Mesh, Model, ModelVertex};
+use crate::gpu::Texture;
 use std::{fs, io, path};
 use wgpu::util::DeviceExt;
 
@@ -36,7 +37,7 @@ pub async fn load_model(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     layout: &wgpu::BindGroupLayout,
-) -> anyhow::Result<model::Model> {
+) -> anyhow::Result<Model> {
     let obj_text = load_string(file_name).await?;
     let obj_cursor = futures::io::Cursor::new(obj_text);
     let mut obj_reader = futures::io::BufReader::new(obj_cursor);
@@ -74,7 +75,7 @@ pub async fn load_model(
                 label: None,
             });
 
-            materials.push(model::Material {
+            materials.push(Material {
                 name: m.name,
                 diffuse_texture,
                 bind_group,
@@ -88,7 +89,7 @@ pub async fn load_model(
             let vertices = (0..m.mesh.positions.len() / 3)
                 .map(|i| {
                     if m.mesh.normals.is_empty() {
-                        model::ModelVertex {
+                        ModelVertex {
                             position: [
                                 m.mesh.positions[i * 3],
                                 m.mesh.positions[i * 3 + 1],
@@ -101,7 +102,7 @@ pub async fn load_model(
                             normal: [0.0, 0.0, 0.0],
                         }
                     } else {
-                        model::ModelVertex {
+                        ModelVertex {
                             position: [
                                 m.mesh.positions[i * 3],
                                 m.mesh.positions[i * 3 + 1],
@@ -132,7 +133,7 @@ pub async fn load_model(
                 usage: wgpu::BufferUsages::INDEX,
             });
 
-            model::Mesh {
+            Mesh {
                 name: file_name.to_string(),
                 vertex_buffer,
                 index_buffer,
@@ -142,5 +143,5 @@ pub async fn load_model(
         })
         .collect::<Vec<_>>();
 
-    Ok(model::Model { meshes, materials })
+    Ok(Model { meshes, materials })
 }

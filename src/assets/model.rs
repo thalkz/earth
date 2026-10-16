@@ -223,6 +223,7 @@ where
     ) {
         self.draw_light_model_instanced(model, 0..1, camera_bind_group, light_bind_group);
     }
+
     fn draw_light_model_instanced(
         &mut self,
         model: &'b Model,

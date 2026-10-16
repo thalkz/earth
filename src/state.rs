@@ -1,9 +1,8 @@
 use crate::app::InputState;
+use crate::assets::{self, DrawLight, DrawModel, Model, ModelVertex, Vertex};
 use crate::gpu::{create_render_pipeline, GpuContext, SurfaceHandler, Texture};
 use crate::instance::InstanceRaw;
-use crate::model::Vertex;
 use crate::scene::{CameraUniform, LightUniform, Scene};
-use crate::{model, resources};
 use std::sync::Arc;
 use std::time::Duration;
 use wgpu::util::DeviceExt;
@@ -19,7 +18,7 @@ pub struct State {
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
     instance_buffer: wgpu::Buffer,
-    obj_model: model::Model,
+    obj_model: Model,
     light_uniform: LightUniform,
     light_buffer: wgpu::Buffer,
     light_bind_group: wgpu::BindGroup,
@@ -148,11 +147,11 @@ impl State {
             &render_pipeline_layout,
             surface.config.format,
             Some(Texture::DEPTH_FORMAT),
-            &[Some(model::ModelVertex::desc()), Some(InstanceRaw::desc())],
+            &[Some(ModelVertex::desc()), Some(InstanceRaw::desc())],
             shader,
         );
 
-        let obj_model = resources::load_model(
+        let obj_model = assets::load_model(
             "cube.obj",
             &gpu.device,
             &gpu.queue,
@@ -191,7 +190,7 @@ impl State {
                 &layout,
                 surface.config.format,
                 Some(Texture::DEPTH_FORMAT),
-                &[Some(model::ModelVertex::desc())],
+                &[Some(ModelVertex::desc())],
                 shader,
             )
         };
@@ -268,7 +267,6 @@ impl State {
             });
             render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
 
-            use crate::model::DrawLight;
             render_pass.set_pipeline(&self.light_render_pipeline);
             render_pass.draw_light_model(
                 &self.obj_model,
@@ -276,7 +274,6 @@ impl State {
                 &self.light_bind_group,
             );
 
-            use crate::model::DrawModel;
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.draw_model_instanced(
                 &self.obj_model,

@@ -224,10 +224,9 @@ src/
 │   ├── camera.rs             # Camera, projection, and orbital controller (glam)
 │   ├── transform.rs          # Translation, Rotation, Scale (TRS)
 │   └── light.rs              # Light structs & GPU uniform representations
-├── assets.rs                 # AssetServer & Handle definitions
+├── assets.rs                 # Asset facade
 ├── assets/                   # Asset submodules
-│   ├── mesh.rs               # GpuMesh (vertex/index buffers, layout descriptors)
-│   ├── material.rs           # Material definition & bind group creation
+│   ├── model.rs              # Model, Mesh, Material, and draw helpers
 │   └── loader.rs             # Async OBJ/MTL, image, and binary loaders
 ├── renderer.rs               # Renderer facade & draw queue coordination
 └── renderer/                 # Modular render passes

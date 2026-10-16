@@ -6,8 +6,7 @@ mod app;
 mod data;
 mod gpu;
 mod instance;
-mod model;
-mod resources;
+mod assets;
 mod scene;
 mod state;
 
