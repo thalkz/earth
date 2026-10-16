@@ -1,6 +1,22 @@
+use crate::scene::Transform;
 use glam::{Quat, Vec3};
 
-use crate::instance::Instance;
+pub struct Instance {
+    pub transform: Transform,
+}
+
+impl Instance {
+    pub fn new(position: Vec3, rotation: Quat) -> Self {
+        Self {
+            transform: Transform::from_rotation_translation(rotation, position),
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn from_transform(transform: Transform) -> Self {
+        Self { transform }
+    }
+}
 
 const NUM_INSTANCES_PER_ROW: u32 = 10;
 const INSTANCE_DISPLACEMENT: Vec3 = Vec3::new(

@@ -1,10 +1,11 @@
 mod input;
+mod state;
 mod time;
 
 pub use input::{Action, InputState};
+pub use state::State;
 pub use time::Clock;
 
-use crate::state::State;
 use std::sync::Arc;
 use winit::{
     application::ApplicationHandler, event::*, event_loop::ActiveEventLoop, keyboard::PhysicalKey,
@@ -33,7 +34,7 @@ impl Default for App {
     }
 }
 
-impl ApplicationHandler<State> for App {
+impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         #[allow(unused_mut)]
         let mut window_attributes = Window::default_attributes();
@@ -44,10 +45,6 @@ impl ApplicationHandler<State> for App {
         );
         self.state =
             Some(pollster::block_on(State::new(window)).expect("should block on state creation"));
-    }
-
-    fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: State) {
-        self.state = Some(event);
     }
 
     fn window_event(

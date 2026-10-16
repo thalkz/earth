@@ -1,14 +1,14 @@
 mod camera;
+mod instance;
 mod light;
 mod transform;
 
 pub use camera::{Camera, CameraController, CameraUniform};
+pub use instance::{build_instances, Instance};
 pub use light::{Light, LightUniform};
 pub use transform::Transform;
 
 use crate::app::InputState;
-use crate::data::build_instances;
-use crate::instance::Instance;
 use std::time::Duration;
 
 pub struct Scene {

@@ -1,13 +1,12 @@
 mod forward_pass;
 mod gizmo_pass;
 
-pub use forward_pass::ForwardPass;
+pub use forward_pass::{ForwardPass, InstanceRaw};
 pub use gizmo_pass::GizmoPass;
 
 use crate::assets::Model;
 use crate::gpu::{GpuContext, SurfaceHandler};
-use crate::instance::{Instance, InstanceRaw};
-use crate::scene::{CameraUniform, Scene};
+use crate::scene::{CameraUniform, Instance, Scene};
 use wgpu::util::DeviceExt;
 
 pub struct Renderer {

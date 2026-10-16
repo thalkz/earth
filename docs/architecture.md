@@ -212,27 +212,30 @@ src/
 ├── app.rs                    # Application & Platform Layer entry & lifecycle
 ├── app/                      # Application submodules
 │   ├── input.rs              # Raw input tracking & virtual Action mapping
+│   ├── state.rs              # Runtime windowed graphics state & loop coordination
 │   └── time.rs               # High-precision frame timing & delta calculations
 ├── gpu.rs                    # Graphics core facade
 ├── gpu/                      # Low-level graphics submodules
 │   ├── context.rs            # GpuContext (Instance, Adapter, Device, Queue)
-│   ├── surface.rs            # SurfaceManager (Surface, Config, DepthTexture)
+│   ├── surface.rs            # SurfaceHandler (Surface, Config, DepthTexture)
 │   ├── pipeline.rs           # Pipeline builder & layout utilities
 │   └── texture.rs            # Texture, TextureView, and Sampler abstractions
 ├── scene.rs                  # Scene facade & container
 ├── scene/                    # Scene submodules
 │   ├── camera.rs             # Camera, projection, and orbital controller (glam)
+│   ├── instance.rs           # Spatial Instance struct & procedural instance generators
 │   ├── transform.rs          # Translation, Rotation, Scale (TRS)
 │   └── light.rs              # Light structs & GPU uniform representations
 ├── assets.rs                 # Asset facade
 ├── assets/                   # Asset submodules
 │   ├── model.rs              # Model, Mesh, Material, and draw helpers
 │   └── loader.rs             # Async OBJ/MTL, image, and binary loaders
-├── renderer.rs               # Renderer facade & draw queue coordination
-└── renderer/                 # Modular render passes
-    └── passes/
-        ├── forward.rs        # Main mesh forward-lighting pass
-        └── gizmo.rs          # Gizmo and debug visualization pass
+├── renderer.rs               # Renderer facade & frame resource coordination
+└── renderer/                 # Render passes & shaders
+    ├── forward_pass.rs       # Main mesh forward-lighting pass & InstanceRaw layout
+    ├── forward.wgsl          # Forward lighting shader
+    ├── gizmo_pass.rs         # Gizmo and debug visualization pass
+    └── gizmo.wgsl            # Gizmo shader
 ```
 
 ---
