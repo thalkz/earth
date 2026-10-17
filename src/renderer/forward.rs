@@ -18,9 +18,9 @@ impl ForwardPass {
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Forward Render Pipeline Layout"),
                 bind_group_layouts: &[
-                    Some(texture_layout),
                     Some(camera_layout),
                     Some(light_layout),
+                    Some(texture_layout),
                 ],
                 immediate_size: 0,
             });
@@ -85,13 +85,13 @@ impl ForwardPass {
         light_bind_group: &'a wgpu::BindGroup,
     ) {
         render_pass.set_pipeline(&self.pipeline);
+        render_pass.set_bind_group(0, camera_bind_group, &[]);
+        render_pass.set_bind_group(1, light_bind_group, &[]);
         for mesh in &render_earth.meshes {
             let material = &render_earth.materials[mesh.material_index];
             render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
             render_pass.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-            render_pass.set_bind_group(0, &material.bind_group, &[]);
-            render_pass.set_bind_group(1, camera_bind_group, &[]);
-            render_pass.set_bind_group(2, light_bind_group, &[]);
+            render_pass.set_bind_group(2, &material.bind_group, &[]);
             render_pass.draw_indexed(0..mesh.num_elements, 0, 0..1);
         }
     }

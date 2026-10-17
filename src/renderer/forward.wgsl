@@ -16,7 +16,7 @@ struct CameraUniform {
     view_proj: mat4x4<f32>,
 };
 
-@group(1) @binding(0)
+@group(0) @binding(0)
 var<uniform> camera: CameraUniform;
 
 struct Light {
@@ -24,7 +24,7 @@ struct Light {
     color: vec3<f32>,
 }
 
-@group(2) @binding(0)
+@group(1) @binding(0)
 var<uniform> light: Light;
 
 @vertex
@@ -39,9 +39,9 @@ fn vs_main(
     return out;
 }
 
-@group(0) @binding(0)
+@group(2) @binding(0)
 var texture_diffuse: texture_2d<f32>;
-@group(0) @binding(1)
+@group(2) @binding(1)
 var sampler_diffuse: sampler;
 
 @fragment
