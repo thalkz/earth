@@ -1,75 +1,25 @@
-use crate::gpu::{GpuContext, SurfaceHandler};
+use crate::gpu::{self, GpuContext, SurfaceHandler};
 use crate::renderer::gizmos::GizmosPass;
-use crate::renderer::model::GpuModel;
-use crate::renderer::{ForwardPass, gizmos};
-use crate::scene::{self, CameraUniform, Gizmos, GizmosVertex, Scene};
-use wgpu::util::DeviceExt;
+use crate::renderer::{ForwardPass, render_scene};
 
 pub struct Renderer {
     forward_pass: ForwardPass,
     gizmos_pass: GizmosPass,
-    camera_buffer: wgpu::Buffer,
-    camera_bind_group: wgpu::BindGroup,
-    light_buffer: wgpu::Buffer,
-    light_bind_group: wgpu::BindGroup,
-    texture_bind_group_layout: wgpu::BindGroupLayout,
-    gizmos_vertex_buffer: wgpu::Buffer,
+    pub texture_bind_group_layout: wgpu::BindGroupLayout,
+    pub camera_bind_group_layout: wgpu::BindGroupLayout,
+    pub light_bind_group_layout: wgpu::BindGroupLayout,
 }
 
 impl Renderer {
     pub fn new(device: &wgpu::Device, color_format: wgpu::TextureFormat) -> Self {
         let texture_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Texture {
-                            multisampled: false,
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                ],
-                label: Some("texture_bind_group_layout"),
-            });
+            device.create_bind_group_layout(&gpu::Texture::bind_group_layout());
 
         let camera_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-                label: Some("camera_bind_group_layout"),
-            });
+            device.create_bind_group_layout(&render_scene::CameraUniform::bind_layout_group());
 
         let light_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-                label: Some("light_bind_group_layout"),
-            });
+            device.create_bind_group_layout(&render_scene::LightUniform::bind_layout_group());
 
         let forward_pass = ForwardPass::new(
             device,
@@ -81,78 +31,12 @@ impl Renderer {
 
         let gizmos_pass = GizmosPass::new(device, color_format, &camera_bind_group_layout);
 
-        let camera_uniform = CameraUniform::new();
-        let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Camera Buffer"),
-            contents: bytemuck::cast_slice(&[camera_uniform]),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-
-        let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &camera_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: camera_buffer.as_entire_binding(),
-            }],
-            label: Some("camera_bind_group"),
-        });
-
-        let light_uniform = crate::scene::LightUniform::new([1.0, 0.0, 0.0], [1.0; 3]);
-        let light_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Light Buffer"),
-            contents: bytemuck::cast_slice(&[light_uniform]),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-
-        let light_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &light_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: light_buffer.as_entire_binding(),
-            }],
-            label: Some("light_bind_group"),
-        });
-
-        let gizmos_vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Gizmos Vertex Buffer"),
-            contents: bytemuck::cast_slice(&[0; scene::GIZMOS_VERTEX_SIZE * 1000]), // TODO what to put here ??
-            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-        });
-
         Self {
             forward_pass,
             gizmos_pass,
-            camera_buffer,
-            camera_bind_group,
-            light_buffer,
-            light_bind_group,
             texture_bind_group_layout,
-            gizmos_vertex_buffer,
-        }
-    }
-
-    pub fn prepare(&mut self, gpu: &GpuContext, scene: &Scene) {
-        let mut camera_uniform = CameraUniform::new();
-        camera_uniform.update_view_proj(&scene.camera);
-        gpu.queue.write_buffer(
-            &self.camera_buffer,
-            0,
-            bytemuck::cast_slice(&[camera_uniform]),
-        );
-
-        let light_uniform = scene.light.to_uniform();
-        gpu.queue.write_buffer(
-            &self.light_buffer,
-            0,
-            bytemuck::cast_slice(&[light_uniform]),
-        );
-
-        if !scene.gizmos.vertices.is_empty() {
-            gpu.queue.write_buffer(
-                &self.gizmos_vertex_buffer,
-                0,
-                bytemuck::cast_slice(&scene.gizmos.vertices),
-            );
+            camera_bind_group_layout,
+            light_bind_group_layout,
         }
     }
 
@@ -160,7 +44,7 @@ impl Renderer {
         &self,
         gpu: &GpuContext,
         surface: &mut SurfaceHandler,
-        scene: &Scene,
+        render_scene: &render_scene::RenderScene,
     ) -> anyhow::Result<()> {
         let Some(output) = surface.get_current_texture(&gpu.device)? else {
             return Ok(());
@@ -206,39 +90,85 @@ impl Renderer {
                 multiview_mask: None,
             });
 
-            let earth_gpu = GpuModel::from_cpu_model(
-                &gpu.device,
-                &gpu.queue,
-                &self.texture_bind_group_layout,
-                &scene.earth,
-            );
-
             self.forward_pass.draw(
                 &mut render_pass,
-                &earth_gpu,
-                0..1 as u32,
-                &self.camera_bind_group,
-                &self.light_bind_group,
+                &render_scene.render_earth,
+                &render_scene.camera_bind_group,
+                &render_scene.light_bind_group,
             );
 
-            if (!scene.gizmos.vertices.is_empty()) {
-                gpu.queue.write_buffer(
-                    &self.gizmos_vertex_buffer,
-                    0,
-                    bytemuck::cast_slice(&scene.gizmos.vertices),
-                );
-                self.gizmos_pass.draw(
-                    &mut render_pass,
-                    scene.gizmos.vertices.len() as u32,
-                    &self.gizmos_vertex_buffer,
-                    &self.camera_bind_group,
-                );
-            }
+            self.gizmos_pass.draw(
+                &mut render_pass,
+                &render_scene.render_gizmos,
+                &render_scene.camera_bind_group,
+            );
         }
 
         gpu.queue.submit(std::iter::once(encoder.finish()));
         gpu.queue.present(output);
 
         Ok(())
+    }
+}
+
+impl gpu::Texture {
+    fn bind_group_layout<'a>() -> wgpu::BindGroupLayoutDescriptor<'a> {
+        wgpu::BindGroupLayoutDescriptor {
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        multisampled: false,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ],
+            label: Some("texture_bind_group_layout"),
+        }
+    }
+}
+
+impl render_scene::CameraUniform {
+    fn bind_layout_group<'a>() -> wgpu::BindGroupLayoutDescriptor<'a> {
+        wgpu::BindGroupLayoutDescriptor {
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+            label: Some("camera_bind_group_layout"),
+        }
+    }
+}
+
+impl render_scene::LightUniform {
+    fn bind_layout_group<'a>() -> wgpu::BindGroupLayoutDescriptor<'a> {
+        wgpu::BindGroupLayoutDescriptor {
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+            label: Some("light_bind_group_layout"),
+        }
     }
 }

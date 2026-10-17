@@ -1,5 +1,6 @@
 use crate::gpu::Texture;
-use crate::scene::{self, GizmosVertex};
+use crate::renderer::{gizmos, render_gizmos};
+use crate::scene::GizmosVertex;
 
 pub struct GizmosPass {
     pub pipeline: wgpu::RenderPipeline,
@@ -28,7 +29,7 @@ impl GizmosPass {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"),
-                buffers: &[Some(GizmosVertex::desc())],
+                buffers: &[Some(gizmos::GizmosVertex::desc())],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
@@ -72,40 +73,12 @@ impl GizmosPass {
     pub fn draw<'a>(
         &'a self,
         render_pass: &mut wgpu::RenderPass<'a>,
-        vertex_count: u32,
-        gizmos_buffer: &'a wgpu::Buffer,
+        render_gizmos: &render_gizmos::RenderGizmos,
         camera_bind_group: &'a wgpu::BindGroup,
     ) {
         render_pass.set_pipeline(&self.pipeline);
-        render_pass.set_vertex_buffer(0, gizmos_buffer.slice(..));
+        render_pass.set_vertex_buffer(0, render_gizmos.vertices_buffer.slice(..));
         render_pass.set_bind_group(0, camera_bind_group, &[]);
-        render_pass.draw(0..vertex_count, 0..1);
-    }
-}
-
-pub struct GizmosBuffer {
-    pub vertices_buffer: wgpu::Buffer,
-    pub vertex_count: u32,
-}
-
-impl GizmosVertex {
-    pub fn desc() -> wgpu::VertexBufferLayout<'static> {
-        use std::mem;
-        wgpu::VertexBufferLayout {
-            array_stride: mem::size_of::<crate::scene::GizmosVertex>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &[
-                wgpu::VertexAttribute {
-                    offset: 0,
-                    shader_location: 0,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-                wgpu::VertexAttribute {
-                    offset: mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
-                    shader_location: 1,
-                    format: wgpu::VertexFormat::Float32x4,
-                },
-            ],
-        }
+        render_pass.draw(0..render_gizmos.vertex_count, 0..1);
     }
 }

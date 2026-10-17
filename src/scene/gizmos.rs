@@ -1,10 +1,11 @@
+use crate::assets;
+
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct GizmosVertex {
     position: [f32; 3],
     color: [f32; 4],
 }
-pub const GIZMOS_VERTEX_SIZE: usize = 7;
 
 impl GizmosVertex {
     fn new(position: [f32; 3], color: [f32; 4]) -> GizmosVertex {
@@ -20,6 +21,21 @@ impl Gizmos {
     pub fn new() -> Gizmos {
         Gizmos {
             vertices: Vec::new(),
+        }
+    }
+
+    pub fn add_model(&mut self, model: &assets::Model, color: [f32; 4]) {
+        for mesh in &model.meshes {
+            let mut i = 0;
+            while i < (mesh.indices.len() - 2) {
+                let a = mesh.vertices[mesh.indices[i] as usize].position;
+                let b = mesh.vertices[mesh.indices[i + 1] as usize].position;
+                let c = mesh.vertices[mesh.indices[i + 2] as usize].position;
+                self.add_line(a, b, color);
+                self.add_line(b, c, color);
+                self.add_line(c, a, color);
+                i += 3;
+            }
         }
     }
 

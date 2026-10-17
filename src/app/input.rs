@@ -33,7 +33,7 @@ impl InputState {
 
 impl From<&InputState> for CameraActionState {
     fn from(value: &InputState) -> Self {
-        // TODO(thalkz) avoid allocating a new hashmap every frame
+        // TODO avoid allocating a new hashmap every frame
         let actions = value
             .pressed_keys
             .iter()

@@ -1,6 +1,4 @@
-use std::ops::Range;
-
-use super::model::GpuModel;
+use super::render_model::RenderModel;
 use crate::assets::Vertex;
 use crate::gpu::Texture;
 
@@ -82,20 +80,19 @@ impl ForwardPass {
     pub fn draw<'a>(
         &'a self,
         render_pass: &mut wgpu::RenderPass<'a>,
-        model: &GpuModel,
-        instances: Range<u32>,
+        render_earth: &RenderModel,
         camera_bind_group: &'a wgpu::BindGroup,
         light_bind_group: &'a wgpu::BindGroup,
     ) {
         render_pass.set_pipeline(&self.pipeline);
-        for mesh in &model.meshes {
-            let material = &model.materials[mesh.material_index];
+        for mesh in &render_earth.meshes {
+            let material = &render_earth.materials[mesh.material_index];
             render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
             render_pass.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
             render_pass.set_bind_group(0, &material.bind_group, &[]);
             render_pass.set_bind_group(1, camera_bind_group, &[]);
             render_pass.set_bind_group(2, light_bind_group, &[]);
-            render_pass.draw_indexed(0..mesh.num_elements, 0, instances.clone());
+            render_pass.draw_indexed(0..mesh.num_elements, 0, 0..1);
         }
     }
 }

@@ -2,27 +2,27 @@ use crate::assets::{self, Model, Vertex};
 use crate::gpu::Texture;
 use wgpu::util::DeviceExt;
 
-pub struct GpuModel {
-    pub meshes: Vec<GpuMesh>,
-    pub materials: Vec<GpuMaterial>,
+pub struct RenderModel {
+    pub meshes: Vec<RenderMesh>,
+    pub materials: Vec<RenderMaterial>,
 }
 
-pub struct GpuMesh {
+pub struct RenderMesh {
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,
     pub num_elements: u32,
     pub material_index: usize,
 }
 
-pub struct GpuMaterial {
+pub struct RenderMaterial {
     pub bind_group: wgpu::BindGroup,
 }
 
-impl GpuModel {
-    pub fn from_cpu_model(
+impl RenderModel {
+    pub fn from_model(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        material_layout: &wgpu::BindGroupLayout,
+        texture_bind_group_layout: &wgpu::BindGroupLayout,
         model: &Model,
     ) -> Self {
         let materials = model
@@ -44,8 +44,8 @@ impl GpuModel {
                     Some(&mat.name),
                 );
 
-                let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-                    layout: material_layout,
+                let texture_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    layout: texture_bind_group_layout,
                     entries: &[
                         wgpu::BindGroupEntry {
                             binding: 0,
@@ -59,7 +59,9 @@ impl GpuModel {
                     label: Some(&format!("Material Bind Group {}", mat.name)),
                 });
 
-                GpuMaterial { bind_group }
+                RenderMaterial {
+                    bind_group: texture_bind_group,
+                }
             })
             .collect();
 
@@ -78,7 +80,7 @@ impl GpuModel {
                     usage: wgpu::BufferUsages::INDEX,
                 });
 
-                GpuMesh {
+                RenderMesh {
                     vertex_buffer,
                     index_buffer,
                     num_elements: mesh.indices.len() as u32,
