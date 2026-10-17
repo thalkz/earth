@@ -31,8 +31,8 @@ impl RenderModel {
             .iter()
             .map(|mat| {
                 let image = match &mat.diffuse {
-                    assets::MaterialDiffuse::Texture(img) => img.clone(),
-                    assets::MaterialDiffuse::Color(rgba) => assets::ImageAsset::from_color(*rgba),
+                    assets::MaterialDiffuse::Texture(img) => img,
+                    assets::MaterialDiffuse::Color(rgba) => &assets::ImageAsset::from_color(*rgba),
                 };
 
                 let texture = Texture::create_2d(

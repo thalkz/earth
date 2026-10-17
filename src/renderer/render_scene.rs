@@ -6,8 +6,7 @@ use wgpu::util::DeviceExt;
 
 pub struct RenderScene {
     pub render_earth: render_model::RenderModel,
-    pub render_gizmos: Option<render_gizmos::RenderGizmos>,
-
+    pub render_gizmos: render_gizmos::RenderGizmos,
     pub camera_buffer: wgpu::Buffer,
     pub camera_bind_group: wgpu::BindGroup,
     pub light_buffer: wgpu::Buffer,
@@ -32,7 +31,8 @@ impl RenderScene {
             &scene.earth,
         );
 
-        let render_gizmos = render_gizmos::RenderGizmos::from_gizmos(device, &scene.gizmos);
+        let mut render_gizmos = render_gizmos::RenderGizmos::new(device);
+        render_gizmos.update(device, queue, &scene.gizmos);
 
         let mut camera_uniform = CameraUniform::new();
         camera_uniform.update_view_proj(&scene.camera);
@@ -95,19 +95,7 @@ impl RenderScene {
             bytemuck::cast_slice(&[light_uniform]),
         );
 
-        if scene.gizmos.vertices.is_empty() {
-            self.render_gizmos = None;
-        } else if self.render_gizmos.is_none() {
-            self.render_gizmos = render_gizmos::RenderGizmos::from_gizmos(&device, &scene.gizmos);
-        }
-
-        if let Some(render_gizmos) = &self.render_gizmos {
-            queue.write_buffer(
-                &render_gizmos.vertex_buffer,
-                0,
-                bytemuck::cast_slice(&scene.gizmos.vertices),
-            );
-        }
+        self.render_gizmos.update(device, queue, &scene.gizmos);
     }
 }
 
