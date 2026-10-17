@@ -26,7 +26,7 @@ pub fn load_cube(resolution: usize) -> model::Model {
     let meshes: Vec<model::Mesh> = CUBE_FACE_NORMALS
         .iter()
         .enumerate()
-        .map(|(i, &normal)| create_face(normal, resolution, i))
+        .map(|(i, &normal)| create_sphere(normal, resolution, i))
         .collect();
     let materials = CUBE_FACE_MATERIALS
         .map(|(name, color)| model::Material {
@@ -41,7 +41,7 @@ pub fn load_cube(resolution: usize) -> model::Model {
     }
 }
 
-fn create_face(normal: glam::Vec3, resolution: usize, material_index: usize) -> model::Mesh {
+fn create_sphere(normal: glam::Vec3, resolution: usize, material_index: usize) -> model::Mesh {
     let axis_u = glam::Vec3::new(normal.y, normal.z, normal.x);
     let axis_v = normal.cross(axis_u);
 
@@ -58,12 +58,13 @@ fn create_face(normal: glam::Vec3, resolution: usize, material_index: usize) -> 
         for x in 0..resolution {
             let t = glam::Vec2::new(x as f32, y as f32) / (resolution - 1) as f32;
 
-            let position = normal + axis_u * (2.0 * t.x - 1.0) + axis_v * (2.0 * t.y - 1.0);
+            let position =
+                (normal + axis_u * (2.0 * t.x - 1.0) + axis_v * (2.0 * t.y - 1.0)).normalize();
 
             let vertex = model::Vertex {
                 position: position.into(),
                 tex_coords: [t.x, 1.0 - t.y],
-                normal: normal.into(),
+                normal: position.into(),
             };
             vertices.push(vertex);
 

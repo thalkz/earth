@@ -23,7 +23,7 @@ impl State {
         let renderer = renderer::Renderer::new(&gpu.device, surface.config.format);
 
         // let earth_model = assets::load_model("cube.obj").await?;
-        let cube = assets::load_cube(4);
+        let cube = assets::load_cube(10);
 
         let scene_config = scene::SceneConfig {
             width: surface.config.width,
