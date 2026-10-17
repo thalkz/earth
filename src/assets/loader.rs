@@ -35,6 +35,7 @@ pub async fn load_image(file_name: &str) -> anyhow::Result<model::ImageAsset> {
     })
 }
 
+#[allow(dead_code)]
 pub async fn load_model(file_name: &str) -> anyhow::Result<model::Model> {
     let obj_text = load_string(file_name).await?;
     let obj_cursor = futures::io::Cursor::new(obj_text);

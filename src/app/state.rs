@@ -21,9 +21,10 @@ impl State {
 
         let mut renderer = Renderer::new(&gpu.device, surface.config.format);
 
-        let earth_model = assets::load_model("cube.obj").await?;
+        // let earth_model = assets::load_model("cube.obj").await?;
+        let cube = assets::load_cube(4);
 
-        let scene = Scene::new(surface.config.width, surface.config.height, earth_model);
+        let scene = Scene::new(surface.config.width, surface.config.height, cube);
         renderer.prepare(&gpu, &scene);
 
         Ok(Self {

@@ -1,6 +1,7 @@
+mod earth;
 mod loader;
 mod model;
 
-#[allow(unused_imports)]
-pub use loader::{load_binary, load_image, load_model, load_string};
+pub use earth::load_cube;
+pub use loader::load_model;
 pub use model::{ImageAsset, MaterialDiffuse, Model, Vertex};
