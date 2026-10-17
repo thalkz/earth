@@ -77,7 +77,7 @@ impl GizmosPass {
         camera_bind_group: &'a wgpu::BindGroup,
     ) {
         render_pass.set_pipeline(&self.pipeline);
-        render_pass.set_vertex_buffer(0, render_gizmos.vertices_buffer.slice(..));
+        render_pass.set_vertex_buffer(0, render_gizmos.vertex_buffer.slice(..));
         render_pass.set_bind_group(0, camera_bind_group, &[]);
         render_pass.draw(0..render_gizmos.vertex_count, 0..1);
     }

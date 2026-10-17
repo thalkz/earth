@@ -38,13 +38,10 @@ impl Camera {
     }
 
     pub fn right_axis(&self) -> glam::Vec3 {
-        let foreward = self.forward_axis();
-        foreward.cross(self.up).normalize()
+        self.forward_axis().cross(self.up).normalize()
     }
 
     pub fn up_axis(&self) -> glam::Vec3 {
-        let foreward = self.forward_axis();
-        let right = foreward.cross(self.up).normalize();
-        right.cross(foreward)
+        self.right_axis().cross(self.forward_axis()).normalize()
     }
 }

@@ -16,10 +16,10 @@ impl Renderer {
             device.create_bind_group_layout(&gpu::Texture::bind_group_layout());
 
         let camera_bind_group_layout =
-            device.create_bind_group_layout(&render_scene::CameraUniform::bind_layout_group());
+            device.create_bind_group_layout(&render_scene::CameraUniform::bind_group_layout());
 
         let light_bind_group_layout =
-            device.create_bind_group_layout(&render_scene::LightUniform::bind_layout_group());
+            device.create_bind_group_layout(&render_scene::LightUniform::bind_group_layout());
 
         let forward_pass = ForwardPass::new(
             device,
@@ -138,7 +138,7 @@ impl gpu::Texture {
 }
 
 impl render_scene::CameraUniform {
-    fn bind_layout_group<'a>() -> wgpu::BindGroupLayoutDescriptor<'a> {
+    fn bind_group_layout<'a>() -> wgpu::BindGroupLayoutDescriptor<'a> {
         wgpu::BindGroupLayoutDescriptor {
             entries: &[wgpu::BindGroupLayoutEntry {
                 binding: 0,
@@ -156,7 +156,7 @@ impl render_scene::CameraUniform {
 }
 
 impl render_scene::LightUniform {
-    fn bind_layout_group<'a>() -> wgpu::BindGroupLayoutDescriptor<'a> {
+    fn bind_group_layout<'a>() -> wgpu::BindGroupLayoutDescriptor<'a> {
         wgpu::BindGroupLayoutDescriptor {
             entries: &[wgpu::BindGroupLayoutEntry {
                 binding: 0,

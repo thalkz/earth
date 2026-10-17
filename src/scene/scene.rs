@@ -1,8 +1,9 @@
 use crate::assets::Model;
-use crate::scene::{Camera, CameraActionState, CameraController, Gizmos, Light};
+use crate::scene::{self, Camera, CameraActionState, CameraController, Gizmos, Light};
 use std::time::Duration;
 
 pub struct Scene {
+    pub config: SceneConfig,
     pub camera: Camera,
     pub camera_controller: CameraController,
     pub light: Light,
@@ -10,13 +11,27 @@ pub struct Scene {
     pub gizmos: Gizmos,
 }
 
+pub struct SceneConfig {
+    pub width: u32,
+    pub height: u32,
+    pub show_gizmos: bool,
+}
+
 impl Scene {
-    pub fn new(width: u32, height: u32, earth: Model, gizmos: Gizmos) -> Self {
-        let camera = Camera::new(width, height);
+    pub fn new(config: SceneConfig, earth: Model) -> Self {
+        let camera = Camera::new(config.width, config.height);
         let camera_controller = CameraController::new(10.0);
         let light = Light::new(glam::vec3(2.0, 2.0, 2.0), glam::vec3(1.0, 1.0, 1.0));
 
+        let mut gizmos = scene::Gizmos::new();
+
+        if config.show_gizmos {
+            let white = [1.0; 4];
+            gizmos.add_model(&earth, white, &camera);
+        }
+
         Self {
+            config,
             camera,
             camera_controller,
             light,
@@ -37,5 +52,11 @@ impl Scene {
         let rotation =
             glam::Quat::from_axis_angle(glam::Vec3::Y, rotation_speed * dt.as_secs_f32());
         self.light.direction = (rotation * self.light.direction).normalize();
+
+        if self.config.show_gizmos {
+            self.gizmos.clear();
+            let white = [1.0; 4];
+            self.gizmos.add_model(&self.earth, white, &self.camera);
+        }
     }
 }

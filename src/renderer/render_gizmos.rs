@@ -2,7 +2,7 @@ use crate::scene::{self, GizmosVertex};
 use wgpu::util::DeviceExt;
 
 pub struct RenderGizmos {
-    pub vertices_buffer: wgpu::Buffer,
+    pub vertex_buffer: wgpu::Buffer,
     pub vertex_count: u32,
 }
 
@@ -15,7 +15,7 @@ impl RenderGizmos {
         });
 
         RenderGizmos {
-            vertices_buffer: gizmos_vertex_buffer,
+            vertex_buffer: gizmos_vertex_buffer,
             vertex_count: gizmos.vertices.len() as u32,
         }
     }

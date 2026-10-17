@@ -10,4 +10,4 @@ pub use camera::Camera;
 pub use camera_controller::CameraController;
 pub use gizmos::{Gizmos, GizmosVertex};
 pub use light::Light;
-pub use scene::Scene;
+pub use scene::{Scene, SceneConfig};

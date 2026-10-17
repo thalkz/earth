@@ -32,7 +32,9 @@ impl RenderScene {
 
         let render_gizmos = render_gizmos::RenderGizmos::from_gizmos(device, &scene.gizmos);
 
-        let camera_uniform = CameraUniform::new();
+        let mut camera_uniform = CameraUniform::new();
+        camera_uniform.update_view_proj(&scene.camera);
+
         let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Camera Buffer"),
             contents: bytemuck::cast_slice(&[camera_uniform]),
@@ -48,7 +50,7 @@ impl RenderScene {
             label: Some("camera_bind_group"),
         });
 
-        let light_uniform = LightUniform::new([1.0, 0.0, 0.0], [1.0; 3]);
+        let light_uniform: LightUniform = scene.light.into();
         let light_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Light Buffer"),
             contents: bytemuck::cast_slice(&[light_uniform]),
@@ -90,6 +92,14 @@ impl RenderScene {
             0,
             bytemuck::cast_slice(&[light_uniform]),
         );
+
+        if !scene.gizmos.vertices.is_empty() {
+            queue.write_buffer(
+                &self.render_gizmos.vertex_buffer,
+                0,
+                bytemuck::cast_slice(&scene.gizmos.vertices),
+            );
+        }
     }
 }
 

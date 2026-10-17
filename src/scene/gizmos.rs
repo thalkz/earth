@@ -1,14 +1,14 @@
-use crate::assets;
+use crate::{assets, scene::camera};
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct GizmosVertex {
-    position: [f32; 3],
+    position: glam::Vec3,
     color: [f32; 4],
 }
 
 impl GizmosVertex {
-    fn new(position: [f32; 3], color: [f32; 4]) -> GizmosVertex {
+    fn new(position: glam::Vec3, color: [f32; 4]) -> GizmosVertex {
         GizmosVertex { position, color }
     }
 }
@@ -24,27 +24,45 @@ impl Gizmos {
         }
     }
 
-    pub fn add_model(&mut self, model: &assets::Model, color: [f32; 4]) {
+    pub fn add_model(&mut self, model: &assets::Model, color: [f32; 4], camera: &camera::Camera) {
         for mesh in &model.meshes {
-            let mut i = 0;
-            while i < (mesh.indices.len() - 2) {
-                let a = mesh.vertices[mesh.indices[i] as usize].position;
-                let b = mesh.vertices[mesh.indices[i + 1] as usize].position;
-                let c = mesh.vertices[mesh.indices[i + 2] as usize].position;
+            for triangle in mesh.indices.chunks_exact(3) {
+                let a = mesh.vertices[triangle[0] as usize].position.into();
+                let b = mesh.vertices[triangle[1] as usize].position.into();
+                let c = mesh.vertices[triangle[2] as usize].position.into();
                 self.add_line(a, b, color);
                 self.add_line(b, c, color);
                 self.add_line(c, a, color);
-                i += 3;
+                self.add_point(a, color, camera);
             }
         }
     }
 
-    pub fn add_line(&mut self, from: [f32; 3], to: [f32; 3], color: [f32; 4]) {
+    pub fn add_line(&mut self, from: glam::Vec3, to: glam::Vec3, color: [f32; 4]) {
         self.vertices.push(GizmosVertex::new(from, color));
         self.vertices.push(GizmosVertex::new(to, color));
     }
 
-    pub fn add_point(&mut self, at: [f32; 3], color: [f32; 4]) {
-        todo!()
+    pub fn add_point(&mut self, at: glam::Vec3, color: [f32; 4], camera: &camera::Camera) {
+        let right = camera.right_axis();
+        let up = camera.up_axis();
+        let step = std::f32::consts::TAU / CIRCLE_SEGMENTS as f32;
+
+        for i in 0..self::CIRCLE_SEGMENTS {
+            let t0 = i as f32 * step;
+            let t1 = (i + 1) as f32 * step;
+
+            let p0 = at + (right * t0.cos() + up * t0.sin()) * RADIUS;
+            let p1 = at + (right * t1.cos() + up * t1.sin()) * RADIUS;
+
+            self.add_line(p0, p1, color);
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.vertices.clear();
     }
 }
+
+const CIRCLE_SEGMENTS: u32 = 8;
+const RADIUS: f32 = 0.02;

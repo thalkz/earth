@@ -24,12 +24,16 @@ impl State {
 
         // let earth_model = assets::load_model("cube.obj").await?;
         let cube = assets::load_cube(4);
-        let mut gizmos = scene::Gizmos::new();
-        let white = [1.0; 4];
-        gizmos.add_model(&cube, white);
 
-        let scene = scene::Scene::new(surface.config.width, surface.config.height, cube, gizmos);
-        let mut render_scene = renderer::RenderScene::new(
+        let scene_config = scene::SceneConfig {
+            width: surface.config.width,
+            height: surface.config.height,
+            show_gizmos: true,
+        };
+
+        let scene = scene::Scene::new(scene_config, cube);
+
+        let render_scene = renderer::RenderScene::new(
             &gpu.device,
             &gpu.queue,
             &scene,
@@ -37,8 +41,6 @@ impl State {
             &renderer.camera_bind_group_layout,
             &renderer.light_bind_group_layout,
         );
-
-        render_scene.update(&gpu.queue, &scene);
 
         Ok(Self {
             window,
