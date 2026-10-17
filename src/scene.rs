@@ -5,7 +5,7 @@ mod gizmos;
 mod light;
 mod scene;
 
-pub use action::{CameraAction, CameraActionState};
+pub use action::{Action, CameraActionState};
 pub use camera::Camera;
 pub use camera_controller::CameraController;
 pub use gizmos::{Gizmos, GizmosVertex};

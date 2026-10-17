@@ -28,7 +28,7 @@ impl State {
         let scene_config = scene::SceneConfig {
             width: surface.config.width,
             height: surface.config.height,
-            show_gizmos: true,
+            enable_gizmos: true,
         };
 
         let scene = scene::Scene::new(scene_config, cube);
@@ -59,7 +59,8 @@ impl State {
 
     pub fn render(&mut self) -> anyhow::Result<()> {
         self.window.request_redraw();
-        self.render_scene.update(&self.gpu.queue, &self.scene);
+        self.render_scene
+            .update(&self.gpu.device, &self.gpu.queue, &self.scene);
         self.renderer
             .render(&self.gpu, &mut self.surface, &self.render_scene)
     }

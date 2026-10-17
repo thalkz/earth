@@ -97,11 +97,13 @@ impl Renderer {
                 &render_scene.light_bind_group,
             );
 
-            self.gizmos_pass.draw(
-                &mut render_pass,
-                &render_scene.render_gizmos,
-                &render_scene.camera_bind_group,
-            );
+            if let Some(render_gizmos) = &render_scene.render_gizmos {
+                self.gizmos_pass.draw(
+                    &mut render_pass,
+                    &render_gizmos,
+                    &render_scene.camera_bind_group,
+                );
+            }
         }
 
         gpu.queue.submit(std::iter::once(encoder.finish()));

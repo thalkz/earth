@@ -1,4 +1,4 @@
-use crate::scene::{CameraAction, CameraActionState};
+use crate::scene::{Action, CameraActionState};
 use std::collections::HashSet;
 use winit::keyboard::KeyCode;
 
@@ -44,12 +44,13 @@ impl From<&InputState> for CameraActionState {
     }
 }
 
-fn to_action(key: KeyCode) -> Option<CameraAction> {
+fn to_action(key: KeyCode) -> Option<Action> {
     match key {
-        KeyCode::KeyW | KeyCode::ArrowUp => Some(CameraAction::MoveForward),
-        KeyCode::KeyS | KeyCode::ArrowDown => Some(CameraAction::MoveBackward),
-        KeyCode::KeyA | KeyCode::ArrowLeft => Some(CameraAction::MoveLeft),
-        KeyCode::KeyD | KeyCode::ArrowRight => Some(CameraAction::MoveRight),
+        KeyCode::KeyW | KeyCode::ArrowUp => Some(Action::MoveForward),
+        KeyCode::KeyS | KeyCode::ArrowDown => Some(Action::MoveBackward),
+        KeyCode::KeyA | KeyCode::ArrowLeft => Some(Action::MoveLeft),
+        KeyCode::KeyD | KeyCode::ArrowRight => Some(Action::MoveRight),
+        KeyCode::Space => Some(Action::ShowGizmos),
         _ => None,
     }
 }

@@ -26,10 +26,10 @@ impl CameraController {
 
         // Prevents glitching when the camera gets too close to the
         // center of the scene.
-        if actions.is_active(scene::CameraAction::MoveForward) && forward_mag > move_amount {
+        if actions.is_active(scene::Action::MoveForward) && forward_mag > move_amount {
             camera.eye += forward_norm * move_amount;
         }
-        if actions.is_active(scene::CameraAction::MoveBackward) {
+        if actions.is_active(scene::Action::MoveBackward) {
             camera.eye -= forward_norm * move_amount;
         }
 
@@ -39,13 +39,13 @@ impl CameraController {
         let forward = camera.target - camera.eye;
         let forward_mag = forward.length();
 
-        if actions.is_active(scene::CameraAction::MoveRight) {
+        if actions.is_active(scene::Action::MoveRight) {
             // Rescale the distance between the target and the eye so
             // that it doesn't change. The eye, therefore, still
             // lies on the circle made by the target and eye.
             camera.eye = camera.target - (forward + right * move_amount).normalize() * forward_mag;
         }
-        if actions.is_active(scene::CameraAction::MoveLeft) {
+        if actions.is_active(scene::Action::MoveLeft) {
             camera.eye = camera.target - (forward - right * move_amount).normalize() * forward_mag;
         }
     }

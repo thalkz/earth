@@ -7,17 +7,21 @@ pub struct RenderGizmos {
 }
 
 impl RenderGizmos {
-    pub fn from_gizmos(device: &wgpu::Device, gizmos: &scene::Gizmos) -> RenderGizmos {
+    pub fn from_gizmos(device: &wgpu::Device, gizmos: &scene::Gizmos) -> Option<RenderGizmos> {
+        if gizmos.vertices.is_empty() {
+            return None;
+        }
+
         let gizmos_vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Gizmos Vertex Buffer"),
             contents: bytemuck::cast_slice(&gizmos.vertices),
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
 
-        RenderGizmos {
+        Some(RenderGizmos {
             vertex_buffer: gizmos_vertex_buffer,
             vertex_count: gizmos.vertices.len() as u32,
-        }
+        })
     }
 }
 

@@ -6,7 +6,7 @@ use wgpu::util::DeviceExt;
 
 pub struct RenderScene {
     pub render_earth: render_model::RenderModel,
-    pub render_gizmos: render_gizmos::RenderGizmos,
+    pub render_gizmos: Option<render_gizmos::RenderGizmos>,
 
     pub camera_buffer: wgpu::Buffer,
     pub camera_bind_group: wgpu::BindGroup,
@@ -77,7 +77,7 @@ impl RenderScene {
     }
 
     /// Called every frame to write updated positions/matrices to the existing buffers
-    pub fn update(&mut self, queue: &wgpu::Queue, scene: &scene::Scene) {
+    pub fn update(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, scene: &scene::Scene) {
         let mut camera_uniform = CameraUniform::new();
         camera_uniform.update_view_proj(&scene.camera);
         queue.write_buffer(
@@ -93,9 +93,15 @@ impl RenderScene {
             bytemuck::cast_slice(&[light_uniform]),
         );
 
-        if !scene.gizmos.vertices.is_empty() {
+        if scene.gizmos.vertices.is_empty() {
+            self.render_gizmos = None;
+        } else if self.render_gizmos.is_none() {
+            self.render_gizmos = render_gizmos::RenderGizmos::from_gizmos(&device, &scene.gizmos);
+        }
+
+        if let Some(render_gizmos) = &self.render_gizmos {
             queue.write_buffer(
-                &self.render_gizmos.vertex_buffer,
+                &render_gizmos.vertex_buffer,
                 0,
                 bytemuck::cast_slice(&scene.gizmos.vertices),
             );

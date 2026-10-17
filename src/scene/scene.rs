@@ -14,7 +14,7 @@ pub struct Scene {
 pub struct SceneConfig {
     pub width: u32,
     pub height: u32,
-    pub show_gizmos: bool,
+    pub enable_gizmos: bool,
 }
 
 impl Scene {
@@ -22,13 +22,7 @@ impl Scene {
         let camera = Camera::new(config.width, config.height);
         let camera_controller = CameraController::new(10.0);
         let light = Light::new(glam::vec3(2.0, 2.0, 2.0), glam::vec3(1.0, 1.0, 1.0));
-
-        let mut gizmos = scene::Gizmos::new();
-
-        if config.show_gizmos {
-            let white = [1.0; 4];
-            gizmos.add_model(&earth, white, &camera);
-        }
+        let gizmos = scene::Gizmos::new();
 
         Self {
             config,
@@ -53,8 +47,8 @@ impl Scene {
             glam::Quat::from_axis_angle(glam::Vec3::Y, rotation_speed * dt.as_secs_f32());
         self.light.direction = (rotation * self.light.direction).normalize();
 
-        if self.config.show_gizmos {
-            self.gizmos.clear();
+        self.gizmos.clear();
+        if self.config.enable_gizmos && actions.is_active(scene::Action::ShowGizmos) {
             let white = [1.0; 4];
             self.gizmos.add_model(&self.earth, white, &self.camera);
         }
