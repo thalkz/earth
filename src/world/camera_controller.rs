@@ -1,4 +1,4 @@
-use crate::scene::{Action, Camera, CameraActionState};
+use crate::world::{Action, Camera, CameraActionState};
 use std::time::Duration;
 
 pub struct CameraController {
@@ -10,12 +10,7 @@ impl CameraController {
         Self { speed }
     }
 
-    pub fn update_camera(
-        &self,
-        camera: &mut Camera,
-        actions: &CameraActionState,
-        dt: Duration,
-    ) {
+    pub fn update_camera(&self, camera: &mut Camera, actions: &CameraActionState, dt: Duration) {
         let dt_secs = dt.as_secs_f32();
         let move_amount = self.speed * dt_secs;
 

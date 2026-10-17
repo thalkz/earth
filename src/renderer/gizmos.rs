@@ -1,6 +1,6 @@
 use crate::gpu::Texture;
 use crate::renderer::RenderGizmos;
-use crate::scene::GizmosVertex;
+use crate::world::GizmosVertex;
 use wgpu::{
     BindGroup, BindGroupLayout, BlendState, ColorTargetState, ColorWrites, CompareFunction,
     DepthBiasState, DepthStencilState, Device, FragmentState, FrontFace, MultisampleState,

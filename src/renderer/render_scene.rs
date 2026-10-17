@@ -1,5 +1,5 @@
 use crate::renderer::{RenderGizmos, RenderModel};
-use crate::scene::{Camera, Light, Scene};
+use crate::world::{Camera, Light, Scene};
 use glam::Mat4;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{

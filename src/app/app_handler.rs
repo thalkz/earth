@@ -2,7 +2,7 @@ use crate::app::{Clock, InputState, State};
 use std::sync::Arc;
 use winit::application::ApplicationHandler;
 use winit::event::{KeyEvent, WindowEvent};
-use winit::event_loop::{ActiveEventLoop, EventLoop};
+use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::PhysicalKey;
 use winit::window::{Window, WindowId};
 
@@ -83,12 +83,4 @@ impl ApplicationHandler for App {
             _ => {}
         }
     }
-}
-
-pub fn run() -> anyhow::Result<()> {
-    env_logger::init();
-    let event_loop = EventLoop::new()?;
-    let mut app = App::new();
-    event_loop.run_app(&mut app)?;
-    Ok(())
 }

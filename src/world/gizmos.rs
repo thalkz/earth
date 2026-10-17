@@ -1,5 +1,5 @@
 use crate::assets::Model;
-use crate::scene::Camera;
+use crate::world::Camera;
 use glam::Vec3;
 use std::f32::consts::TAU;
 
@@ -29,7 +29,7 @@ impl Gizmos {
 
     pub fn add_model(&mut self, model: &Model, color: [f32; 4], camera: &Camera) {
         for mesh in &model.meshes {
-            for triangle in mesh.indices.chunks_exact(3) {
+            for triangle in mesh.indices.as_chunks::<3>().0 {
                 let a = mesh.vertices[triangle[0] as usize].position.into();
                 let b = mesh.vertices[triangle[1] as usize].position.into();
                 let c = mesh.vertices[triangle[2] as usize].position.into();

@@ -2,6 +2,6 @@ mod app;
 mod assets;
 mod gpu;
 mod renderer;
-mod scene;
+mod world;
 
 pub use app::run;

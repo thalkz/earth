@@ -1,4 +1,4 @@
-use crate::scene::{Gizmos, GizmosVertex};
+use crate::world::{Gizmos, GizmosVertex};
 use std::mem;
 use wgpu::{
     Buffer, BufferAddress, BufferDescriptor, BufferUsages, Device, Queue, VertexAttribute,

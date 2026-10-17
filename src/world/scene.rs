@@ -1,7 +1,5 @@
 use crate::assets::Model;
-use crate::scene::{
-    Action, Camera, CameraActionState, CameraController, Gizmos, Light,
-};
+use crate::world::{Action, Camera, CameraActionState, CameraController, Gizmos, Light};
 use glam::{Quat, Vec3};
 use std::time::Duration;
 

@@ -1,4 +1,4 @@
-use crate::scene::{Action, CameraActionState};
+use crate::world::{Action, CameraActionState};
 use std::collections::HashSet;
 use winit::keyboard::KeyCode;
 

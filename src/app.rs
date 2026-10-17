@@ -1,9 +1,18 @@
-mod app;
+mod app_handler;
 mod input;
 mod state;
 mod time;
 
-pub use app::run;
+use crate::app::app_handler::App;
 pub use input::InputState;
 pub use state::State;
 pub use time::Clock;
+use winit::event_loop::EventLoop;
+
+pub fn run() -> anyhow::Result<()> {
+    env_logger::init();
+    let event_loop = EventLoop::new()?;
+    let mut app = App::new();
+    event_loop.run_app(&mut app)?;
+    Ok(())
+}

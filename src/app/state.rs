@@ -2,7 +2,7 @@ use crate::app::InputState;
 use crate::assets;
 use crate::gpu::{GpuContext, SurfaceHandler};
 use crate::renderer::{RenderScene, Renderer};
-use crate::scene::{Scene, SceneConfig};
+use crate::world::{Scene, SceneConfig};
 use std::sync::Arc;
 use std::time::Duration;
 use winit::window::Window;
