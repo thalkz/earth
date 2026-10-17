@@ -2,7 +2,8 @@ use crate::app::InputState;
 use crate::assets::{self};
 use crate::gpu::{GpuContext, SurfaceHandler};
 use crate::renderer::Renderer;
-use crate::scene::Scene;
+use crate::scene::{self, Gizmos, Scene};
+use std::path::absolute;
 use std::sync::Arc;
 use std::time::Duration;
 use winit::window::Window;
@@ -23,8 +24,25 @@ impl State {
 
         // let earth_model = assets::load_model("cube.obj").await?;
         let cube = assets::load_cube(4);
+        let mut gizmos = Gizmos::new();
 
-        let scene = Scene::new(surface.config.width, surface.config.height, cube);
+        // TODO cleanup
+        let white = [1.0, 1.0, 1.0, 1.0];
+        for mesh in &cube.meshes {
+            let mut i = 0;
+            while i < (mesh.indices.len() - 2) {
+                let a = mesh.vertices[mesh.indices[i] as usize].position;
+                let b = mesh.vertices[mesh.indices[i + 1] as usize].position;
+                let c = mesh.vertices[mesh.indices[i + 2] as usize].position;
+                gizmos.add_line(a, b, white);
+                gizmos.add_line(b, c, white);
+                gizmos.add_line(c, a, white);
+                i += 3;
+            }
+        }
+
+        let scene = Scene::new(surface.config.width, surface.config.height, cube, gizmos);
+
         renderer.prepare(&gpu, &scene);
 
         Ok(Self {

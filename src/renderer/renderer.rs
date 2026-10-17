@@ -1,16 +1,19 @@
 use crate::gpu::{GpuContext, SurfaceHandler};
-use crate::renderer::ForwardPass;
+use crate::renderer::gizmos::GizmosPass;
 use crate::renderer::model::GpuModel;
-use crate::scene::{CameraUniform, Scene};
+use crate::renderer::{ForwardPass, gizmos};
+use crate::scene::{self, CameraUniform, Gizmos, GizmosVertex, Scene};
 use wgpu::util::DeviceExt;
 
 pub struct Renderer {
     forward_pass: ForwardPass,
+    gizmos_pass: GizmosPass,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
     light_buffer: wgpu::Buffer,
     light_bind_group: wgpu::BindGroup,
     texture_bind_group_layout: wgpu::BindGroupLayout,
+    gizmos_vertex_buffer: wgpu::Buffer,
 }
 
 impl Renderer {
@@ -76,6 +79,8 @@ impl Renderer {
             &light_bind_group_layout,
         );
 
+        let gizmos_pass = GizmosPass::new(device, color_format, &camera_bind_group_layout);
+
         let camera_uniform = CameraUniform::new();
         let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Camera Buffer"),
@@ -108,13 +113,21 @@ impl Renderer {
             label: Some("light_bind_group"),
         });
 
+        let gizmos_vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Gizmos Vertex Buffer"),
+            contents: bytemuck::cast_slice(&[0; scene::GIZMOS_VERTEX_SIZE * 1000]), // TODO what to put here ??
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        });
+
         Self {
             forward_pass,
+            gizmos_pass,
             camera_buffer,
             camera_bind_group,
             light_buffer,
             light_bind_group,
             texture_bind_group_layout,
+            gizmos_vertex_buffer,
         }
     }
 
@@ -133,6 +146,14 @@ impl Renderer {
             0,
             bytemuck::cast_slice(&[light_uniform]),
         );
+
+        if !scene.gizmos.vertices.is_empty() {
+            gpu.queue.write_buffer(
+                &self.gizmos_vertex_buffer,
+                0,
+                bytemuck::cast_slice(&scene.gizmos.vertices),
+            );
+        }
     }
 
     pub fn render(
@@ -199,6 +220,20 @@ impl Renderer {
                 &self.camera_bind_group,
                 &self.light_bind_group,
             );
+
+            if (!scene.gizmos.vertices.is_empty()) {
+                gpu.queue.write_buffer(
+                    &self.gizmos_vertex_buffer,
+                    0,
+                    bytemuck::cast_slice(&scene.gizmos.vertices),
+                );
+                self.gizmos_pass.draw(
+                    &mut render_pass,
+                    scene.gizmos.vertices.len() as u32,
+                    &self.gizmos_vertex_buffer,
+                    &self.camera_bind_group,
+                );
+            }
         }
 
         gpu.queue.submit(std::iter::once(encoder.finish()));

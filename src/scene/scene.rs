@@ -1,5 +1,5 @@
 use crate::assets::Model;
-use crate::scene::{Camera, CameraActionState, CameraController, Light};
+use crate::scene::{Camera, CameraActionState, CameraController, Gizmos, Light};
 use std::time::Duration;
 
 pub struct Scene {
@@ -7,10 +7,11 @@ pub struct Scene {
     pub camera_controller: CameraController,
     pub light: Light,
     pub earth: Model,
+    pub gizmos: Gizmos,
 }
 
 impl Scene {
-    pub fn new(width: u32, height: u32, earth: Model) -> Self {
+    pub fn new(width: u32, height: u32, earth: Model, gizmos: Gizmos) -> Self {
         let camera = Camera::new(width, height);
         let camera_controller = CameraController::new(10.0);
         let light = Light::new(glam::vec3(2.0, 2.0, 2.0), glam::vec3(1.0, 1.0, 1.0));
@@ -20,6 +21,7 @@ impl Scene {
             camera_controller,
             light,
             earth,
+            gizmos,
         }
     }
 

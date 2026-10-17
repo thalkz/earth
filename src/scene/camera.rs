@@ -1,4 +1,5 @@
 use glam::{Mat4, Vec3};
+use image::codecs::png::FilterType::Up;
 use std::time::Duration;
 
 use crate::scene::action::{CameraAction, CameraActionState};
@@ -78,6 +79,21 @@ impl Camera {
         let view = Mat4::look_at_rh(self.eye, self.target, self.up);
         let proj = Mat4::perspective_rh(self.fovy.to_radians(), self.aspect, self.znear, self.zfar);
         proj * view
+    }
+
+    pub fn forward_axis(&self) -> glam::Vec3 {
+        (self.target - self.eye).normalize()
+    }
+
+    pub fn right_axis(&self) -> glam::Vec3 {
+        let foreward = self.forward_axis();
+        foreward.cross(self.up).normalize()
+    }
+
+    pub fn up_axis(&self) -> glam::Vec3 {
+        let foreward = self.forward_axis();
+        let right = foreward.cross(self.up).normalize();
+        right.cross(foreward)
     }
 }
 

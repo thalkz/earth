@@ -1,4 +1,5 @@
 mod forward;
+mod gizmos;
 mod model;
 mod renderer;
 
