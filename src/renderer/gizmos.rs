@@ -1,64 +1,71 @@
 use crate::gpu::Texture;
-use crate::renderer::{gizmos, render_gizmos};
+use crate::renderer::RenderGizmos;
 use crate::scene::GizmosVertex;
+use wgpu::{
+    BindGroup, BindGroupLayout, BlendState, ColorTargetState, ColorWrites, CompareFunction,
+    DepthBiasState, DepthStencilState, Device, FragmentState, FrontFace, MultisampleState,
+    PipelineCompilationOptions, PipelineLayoutDescriptor, PolygonMode, PrimitiveState,
+    PrimitiveTopology, RenderPass, RenderPipeline, RenderPipelineDescriptor,
+    ShaderModuleDescriptor, ShaderSource, StencilState, TextureFormat, VertexState,
+};
 
 pub struct GizmosPass {
-    pub pipeline: wgpu::RenderPipeline,
+    pub pipeline: RenderPipeline,
 }
 
 impl GizmosPass {
     pub fn new(
-        device: &wgpu::Device,
-        color_format: wgpu::TextureFormat,
-        camera_layout: &wgpu::BindGroupLayout,
+        device: &Device,
+        color_format: TextureFormat,
+        camera_layout: &BindGroupLayout,
     ) -> Self {
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("Gizmos Pipeline Layout"),
             bind_group_layouts: &[Some(camera_layout)],
             immediate_size: 0,
         });
 
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        let shader = device.create_shader_module(ShaderModuleDescriptor {
             label: Some("Gizmos Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("gizmos.wgsl").into()),
+            source: ShaderSource::Wgsl(include_str!("gizmos.wgsl").into()),
         });
 
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        let pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
             label: Some("Gizmos Pipeline"),
             layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
+            vertex: VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"),
-                buffers: &[Some(gizmos::GizmosVertex::desc())],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                buffers: &[Some(GizmosVertex::desc())],
+                compilation_options: PipelineCompilationOptions::default(),
             },
-            fragment: Some(wgpu::FragmentState {
+            fragment: Some(FragmentState {
                 module: &shader,
                 entry_point: Some("fs_main"),
-                targets: &[Some(wgpu::ColorTargetState {
+                targets: &[Some(ColorTargetState {
                     format: color_format,
-                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-                    write_mask: wgpu::ColorWrites::ALL,
+                    blend: Some(BlendState::ALPHA_BLENDING),
+                    write_mask: ColorWrites::ALL,
                 })],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                compilation_options: PipelineCompilationOptions::default(),
             }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::LineList,
+            primitive: PrimitiveState {
+                topology: PrimitiveTopology::LineList,
                 strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw,
+                front_face: FrontFace::Ccw,
                 cull_mode: None,
-                polygon_mode: wgpu::PolygonMode::Fill,
+                polygon_mode: PolygonMode::Fill,
                 unclipped_depth: false,
                 conservative: false,
             },
-            depth_stencil: Some(wgpu::DepthStencilState {
+            depth_stencil: Some(DepthStencilState {
                 format: Texture::DEPTH_FORMAT,
                 depth_write_enabled: Some(false),
-                depth_compare: Some(wgpu::CompareFunction::LessEqual),
-                stencil: wgpu::StencilState::default(),
-                bias: wgpu::DepthBiasState::default(),
+                depth_compare: Some(CompareFunction::LessEqual),
+                stencil: StencilState::default(),
+                bias: DepthBiasState::default(),
             }),
-            multisample: wgpu::MultisampleState {
+            multisample: MultisampleState {
                 count: 1,
                 mask: !0,
                 alpha_to_coverage_enabled: false,
@@ -72,9 +79,9 @@ impl GizmosPass {
 
     pub fn draw<'a>(
         &'a self,
-        render_pass: &mut wgpu::RenderPass<'a>,
-        render_gizmos: &render_gizmos::RenderGizmos,
-        camera_bind_group: &'a wgpu::BindGroup,
+        render_pass: &mut RenderPass<'a>,
+        render_gizmos: &RenderGizmos,
+        camera_bind_group: &'a BindGroup,
     ) {
         render_pass.set_pipeline(&self.pipeline);
         render_pass.set_vertex_buffer(0, render_gizmos.vertex_buffer.slice(..));

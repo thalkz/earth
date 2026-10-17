@@ -1,24 +1,27 @@
+use crate::gpu::SurfaceHandler;
 use std::sync::Arc;
+use wgpu::{
+    Adapter, Backends, Device, DeviceDescriptor, ExperimentalFeatures, Features, Instance,
+    InstanceDescriptor, Limits, PowerPreference, Queue, RequestAdapterOptions, Surface, Trace,
+};
 use winit::window::Window;
-
-use super::SurfaceHandler;
 
 pub struct GpuContext {
     #[allow(dead_code)]
-    pub instance: wgpu::Instance,
-    pub adapter: wgpu::Adapter,
-    pub device: wgpu::Device,
-    pub queue: wgpu::Queue,
+    pub instance: Instance,
+    pub adapter: Adapter,
+    pub device: Device,
+    pub queue: Queue,
 }
 
 impl GpuContext {
     pub async fn new(
-        instance: wgpu::Instance,
-        compatible_surface: Option<&wgpu::Surface<'_>>,
+        instance: Instance,
+        compatible_surface: Option<&Surface<'_>>,
     ) -> anyhow::Result<Self> {
         let adapter = instance
-            .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::default(),
+            .request_adapter(&RequestAdapterOptions {
+                power_preference: PowerPreference::default(),
                 compatible_surface,
                 force_fallback_adapter: false,
                 apply_limit_buckets: true,
@@ -26,13 +29,13 @@ impl GpuContext {
             .await?;
 
         let (device, queue) = adapter
-            .request_device(&wgpu::DeviceDescriptor {
+            .request_device(&DeviceDescriptor {
                 label: Some("Primary Device"),
-                required_features: wgpu::Features::empty(),
-                experimental_features: wgpu::ExperimentalFeatures::disabled(),
-                required_limits: wgpu::Limits::default(),
+                required_features: Features::empty(),
+                experimental_features: ExperimentalFeatures::disabled(),
+                required_limits: Limits::default(),
                 memory_hints: Default::default(),
-                trace: wgpu::Trace::Off,
+                trace: Trace::Off,
             })
             .await?;
 
@@ -46,8 +49,8 @@ impl GpuContext {
 
     pub async fn init_window(window: Arc<Window>) -> anyhow::Result<(Self, SurfaceHandler)> {
         let size = window.inner_size();
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::PRIMARY,
+        let instance = Instance::new(InstanceDescriptor {
+            backends: Backends::PRIMARY,
             flags: Default::default(),
             memory_budget_thresholds: Default::default(),
             backend_options: Default::default(),

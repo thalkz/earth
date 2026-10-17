@@ -1,6 +1,5 @@
-use std::time;
-
-use crate::scene;
+use crate::scene::{Action, Camera, CameraActionState};
+use std::time::Duration;
 
 pub struct CameraController {
     pub speed: f32,
@@ -13,9 +12,9 @@ impl CameraController {
 
     pub fn update_camera(
         &self,
-        camera: &mut scene::Camera,
-        actions: &scene::CameraActionState,
-        dt: time::Duration,
+        camera: &mut Camera,
+        actions: &CameraActionState,
+        dt: Duration,
     ) {
         let dt_secs = dt.as_secs_f32();
         let move_amount = self.speed * dt_secs;
@@ -26,10 +25,10 @@ impl CameraController {
 
         // Prevents glitching when the camera gets too close to the
         // center of the scene.
-        if actions.is_active(scene::Action::MoveForward) && forward_mag > move_amount {
+        if actions.is_active(Action::MoveForward) && forward_mag > move_amount {
             camera.eye += forward_norm * move_amount;
         }
-        if actions.is_active(scene::Action::MoveBackward) {
+        if actions.is_active(Action::MoveBackward) {
             camera.eye -= forward_norm * move_amount;
         }
 
@@ -39,13 +38,13 @@ impl CameraController {
         let forward = camera.target - camera.eye;
         let forward_mag = forward.length();
 
-        if actions.is_active(scene::Action::MoveRight) {
+        if actions.is_active(Action::MoveRight) {
             // Rescale the distance between the target and the eye so
             // that it doesn't change. The eye, therefore, still
             // lies on the circle made by the target and eye.
             camera.eye = camera.target - (forward + right * move_amount).normalize() * forward_mag;
         }
-        if actions.is_active(scene::Action::MoveLeft) {
+        if actions.is_active(Action::MoveLeft) {
             camera.eye = camera.target - (forward - right * move_amount).normalize() * forward_mag;
         }
     }

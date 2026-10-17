@@ -1,39 +1,39 @@
-use crate::app;
+use crate::app::InputState;
 use crate::assets;
-use crate::gpu;
-use crate::renderer;
-use crate::scene;
+use crate::gpu::{GpuContext, SurfaceHandler};
+use crate::renderer::{RenderScene, Renderer};
+use crate::scene::{Scene, SceneConfig};
 use std::sync::Arc;
-use std::time;
-use winit::window;
+use std::time::Duration;
+use winit::window::Window;
 
 pub struct State {
-    window: Arc<window::Window>,
-    gpu: gpu::GpuContext,
-    surface: gpu::SurfaceHandler,
-    renderer: renderer::Renderer,
-    scene: scene::Scene,
-    render_scene: renderer::RenderScene,
+    window: Arc<Window>,
+    gpu: GpuContext,
+    surface: SurfaceHandler,
+    renderer: Renderer,
+    scene: Scene,
+    render_scene: RenderScene,
 }
 
 impl State {
-    pub async fn new(window: Arc<window::Window>) -> anyhow::Result<Self> {
-        let (gpu, surface) = gpu::GpuContext::init_window(window.clone()).await?;
+    pub async fn new(window: Arc<Window>) -> anyhow::Result<Self> {
+        let (gpu, surface) = GpuContext::init_window(window.clone()).await?;
 
-        let renderer = renderer::Renderer::new(&gpu.device, surface.config.format);
+        let renderer = Renderer::new(&gpu.device, surface.config.format);
 
         // let earth_model = assets::load_model("cube.obj").await?;
         let cube = assets::load_cube(10);
 
-        let scene_config = scene::SceneConfig {
+        let scene_config = SceneConfig {
             width: surface.config.width,
             height: surface.config.height,
             enable_gizmos: true,
         };
 
-        let scene = scene::Scene::new(scene_config, cube);
+        let scene = Scene::new(scene_config, cube);
 
-        let render_scene = renderer::RenderScene::new(
+        let render_scene = RenderScene::new(
             &gpu.device,
             &gpu.queue,
             &scene,
@@ -66,7 +66,7 @@ impl State {
             .render(&self.gpu, &mut self.surface, &self.render_scene)
     }
 
-    pub fn update(&mut self, dt: time::Duration, input: &app::InputState) {
+    pub fn update(&mut self, dt: Duration, input: &InputState) {
         self.scene.update(dt, &input.into());
     }
 }

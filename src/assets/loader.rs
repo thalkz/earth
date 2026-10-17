@@ -1,13 +1,14 @@
-use super::model;
-use image;
+use crate::assets::{ImageAsset, Material, MaterialDiffuse, Mesh, Model, Vertex};
 use image::GenericImageView;
-use std::{fs, io, path};
+use std::path::Path;
+use std::{fs, io};
+use tobj::LoadOptions;
 
 const OUT_DIR: &str = env!("OUT_DIR");
 
 pub async fn load_string(file_name: &str) -> anyhow::Result<String> {
     let txt = {
-        let path = path::Path::new(OUT_DIR).join("res").join(file_name);
+        let path = Path::new(OUT_DIR).join("res").join(file_name);
         fs::read_to_string(path)?
     };
 
@@ -16,19 +17,19 @@ pub async fn load_string(file_name: &str) -> anyhow::Result<String> {
 
 pub async fn load_binary(file_name: &str) -> anyhow::Result<Vec<u8>> {
     let data = {
-        let path = path::Path::new(OUT_DIR).join("res").join(file_name);
+        let path = Path::new(OUT_DIR).join("res").join(file_name);
         fs::read(path)?
     };
 
     Ok(data)
 }
 
-pub async fn load_image(file_name: &str) -> anyhow::Result<model::ImageAsset> {
+pub async fn load_image(file_name: &str) -> anyhow::Result<ImageAsset> {
     let data = load_binary(file_name).await?;
     let img = image::load_from_memory(&data)?;
     let rgba = img.to_rgba8();
     let (width, height) = img.dimensions();
-    Ok(model::ImageAsset {
+    Ok(ImageAsset {
         width,
         height,
         data: rgba.into_raw(),
@@ -36,14 +37,14 @@ pub async fn load_image(file_name: &str) -> anyhow::Result<model::ImageAsset> {
 }
 
 #[allow(dead_code)]
-pub async fn load_model(file_name: &str) -> anyhow::Result<model::Model> {
+pub async fn load_model(file_name: &str) -> anyhow::Result<Model> {
     let obj_text = load_string(file_name).await?;
     let obj_cursor = futures::io::Cursor::new(obj_text);
     let mut obj_reader = futures::io::BufReader::new(obj_cursor);
 
     let (models, obj_materials) = tobj::futures::load_obj_buf(
         &mut obj_reader,
-        &tobj::LoadOptions {
+        &LoadOptions {
             triangulate: true,
             single_index: true,
             ..Default::default()
@@ -58,13 +59,13 @@ pub async fn load_model(file_name: &str) -> anyhow::Result<model::Model> {
     let mut materials = Vec::new();
     for m in obj_materials? {
         let diffuse = if let Some(filename) = m.diffuse_texture {
-            model::MaterialDiffuse::Texture(load_image(&filename).await?)
+            MaterialDiffuse::Texture(load_image(&filename).await?)
         } else {
             let color = m.diffuse.unwrap_or([1.0, 1.0, 1.0]);
-            model::MaterialDiffuse::Color([color[0], color[1], color[2], 1.0])
+            MaterialDiffuse::Color([color[0], color[1], color[2], 1.0])
         };
 
-        materials.push(model::Material {
+        materials.push(Material {
             name: m.name,
             diffuse,
         });
@@ -76,7 +77,7 @@ pub async fn load_model(file_name: &str) -> anyhow::Result<model::Model> {
             let vertices = (0..m.mesh.positions.len() / 3)
                 .map(|i| {
                     if m.mesh.normals.is_empty() {
-                        model::Vertex {
+                        Vertex {
                             position: [
                                 m.mesh.positions[i * 3],
                                 m.mesh.positions[i * 3 + 1],
@@ -89,7 +90,7 @@ pub async fn load_model(file_name: &str) -> anyhow::Result<model::Model> {
                             normal: [0.0, 0.0, 0.0],
                         }
                     } else {
-                        model::Vertex {
+                        Vertex {
                             position: [
                                 m.mesh.positions[i * 3],
                                 m.mesh.positions[i * 3 + 1],
@@ -109,7 +110,7 @@ pub async fn load_model(file_name: &str) -> anyhow::Result<model::Model> {
                 })
                 .collect::<Vec<_>>();
 
-            model::Mesh {
+            Mesh {
                 name: m.name,
                 vertices,
                 indices: m.mesh.indices,
@@ -118,5 +119,5 @@ pub async fn load_model(file_name: &str) -> anyhow::Result<model::Model> {
         })
         .collect::<Vec<_>>();
 
-    Ok(model::Model { meshes, materials })
+    Ok(Model { meshes, materials })
 }

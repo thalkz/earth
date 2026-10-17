@@ -1,14 +1,17 @@
-use crate::{assets, scene::camera};
+use crate::assets::Model;
+use crate::scene::Camera;
+use glam::Vec3;
+use std::f32::consts::TAU;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct GizmosVertex {
-    position: glam::Vec3,
+    position: Vec3,
     color: [f32; 4],
 }
 
 impl GizmosVertex {
-    fn new(position: glam::Vec3, color: [f32; 4]) -> GizmosVertex {
+    fn new(position: Vec3, color: [f32; 4]) -> GizmosVertex {
         GizmosVertex { position, color }
     }
 }
@@ -24,7 +27,7 @@ impl Gizmos {
         }
     }
 
-    pub fn add_model(&mut self, model: &assets::Model, color: [f32; 4], camera: &camera::Camera) {
+    pub fn add_model(&mut self, model: &Model, color: [f32; 4], camera: &Camera) {
         for mesh in &model.meshes {
             for triangle in mesh.indices.chunks_exact(3) {
                 let a = mesh.vertices[triangle[0] as usize].position.into();
@@ -38,17 +41,17 @@ impl Gizmos {
         }
     }
 
-    pub fn add_line(&mut self, from: glam::Vec3, to: glam::Vec3, color: [f32; 4]) {
+    pub fn add_line(&mut self, from: Vec3, to: Vec3, color: [f32; 4]) {
         self.vertices.push(GizmosVertex::new(from, color));
         self.vertices.push(GizmosVertex::new(to, color));
     }
 
-    pub fn add_point(&mut self, at: glam::Vec3, color: [f32; 4], camera: &camera::Camera) {
+    pub fn add_point(&mut self, at: Vec3, color: [f32; 4], camera: &Camera) {
         let right = camera.right_axis();
         let up = camera.up_axis();
-        let step = std::f32::consts::TAU / CIRCLE_SEGMENTS as f32;
+        let step = TAU / CIRCLE_SEGMENTS as f32;
 
-        for i in 0..self::CIRCLE_SEGMENTS {
+        for i in 0..CIRCLE_SEGMENTS {
             let t0 = i as f32 * step;
             let t1 = (i + 1) as f32 * step;
 

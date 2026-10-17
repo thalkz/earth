@@ -1,14 +1,13 @@
-use glam;
+use crate::assets::{Material, MaterialDiffuse, Mesh, Model, Vertex};
+use glam::{Vec2, Vec3};
 
-use crate::assets::model;
-
-const CUBE_FACE_NORMALS: [glam::Vec3; 6] = [
-    glam::Vec3::X,
-    glam::Vec3::Y,
-    glam::Vec3::Z,
-    glam::Vec3::NEG_X,
-    glam::Vec3::NEG_Y,
-    glam::Vec3::NEG_Z,
+const CUBE_FACE_NORMALS: [Vec3; 6] = [
+    Vec3::X,
+    Vec3::Y,
+    Vec3::Z,
+    Vec3::NEG_X,
+    Vec3::NEG_Y,
+    Vec3::NEG_Z,
 ];
 
 const CUBE_FACE_MATERIALS: [(&str, [f32; 4]); 6] = [
@@ -20,32 +19,32 @@ const CUBE_FACE_MATERIALS: [(&str, [f32; 4]); 6] = [
     ("purple", [0.5, 0.0, 0.5, 1.0]),
 ];
 
-pub fn load_cube(resolution: usize) -> model::Model {
+pub fn load_cube(resolution: usize) -> Model {
     assert!(resolution >= 2, "resolution must be at least 2");
 
-    let meshes: Vec<model::Mesh> = CUBE_FACE_NORMALS
+    let meshes: Vec<Mesh> = CUBE_FACE_NORMALS
         .iter()
         .enumerate()
         .map(|(i, &normal)| create_sphere(normal, resolution, i))
         .collect();
     let materials = CUBE_FACE_MATERIALS
-        .map(|(name, color)| model::Material {
+        .map(|(name, color)| Material {
             name: name.to_string(),
-            diffuse: model::MaterialDiffuse::Color(color),
+            diffuse: MaterialDiffuse::Color(color),
         })
         .into();
 
-    model::Model {
-        meshes: meshes,
-        materials: materials,
+    Model {
+        meshes,
+        materials,
     }
 }
 
-fn create_sphere(normal: glam::Vec3, resolution: usize, material_index: usize) -> model::Mesh {
-    let axis_u = glam::Vec3::new(normal.y, normal.z, normal.x);
+fn create_sphere(normal: Vec3, resolution: usize, material_index: usize) -> Mesh {
+    let axis_u = Vec3::new(normal.y, normal.z, normal.x);
     let axis_v = normal.cross(axis_u);
 
-    let mut vertices: Vec<model::Vertex> = {
+    let mut vertices: Vec<Vertex> = {
         let vertices_count = resolution * resolution;
         Vec::with_capacity(vertices_count)
     };
@@ -56,12 +55,12 @@ fn create_sphere(normal: glam::Vec3, resolution: usize, material_index: usize) -
 
     for y in 0..resolution {
         for x in 0..resolution {
-            let t = glam::Vec2::new(x as f32, y as f32) / (resolution - 1) as f32;
+            let t = Vec2::new(x as f32, y as f32) / (resolution - 1) as f32;
 
             let position =
                 (normal + axis_u * (2.0 * t.x - 1.0) + axis_v * (2.0 * t.y - 1.0)).normalize();
 
-            let vertex = model::Vertex {
+            let vertex = Vertex {
                 position: position.into(),
                 tex_coords: [t.x, 1.0 - t.y],
                 normal: position.into(),
@@ -80,10 +79,10 @@ fn create_sphere(normal: glam::Vec3, resolution: usize, material_index: usize) -
         }
     }
 
-    model::Mesh {
+    Mesh {
         name: "cube_face".to_string(),
-        vertices: vertices,
+        vertices,
         indices: triangles,
-        material_index: material_index,
+        material_index,
     }
 }

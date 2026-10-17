@@ -33,15 +33,15 @@ impl Camera {
         proj * view
     }
 
-    pub fn forward_axis(&self) -> glam::Vec3 {
+    pub fn forward_axis(&self) -> Vec3 {
         (self.target - self.eye).normalize()
     }
 
-    pub fn right_axis(&self) -> glam::Vec3 {
+    pub fn right_axis(&self) -> Vec3 {
         self.forward_axis().cross(self.up).normalize()
     }
 
-    pub fn up_axis(&self) -> glam::Vec3 {
+    pub fn up_axis(&self) -> Vec3 {
         self.right_axis().cross(self.forward_axis()).normalize()
     }
 }

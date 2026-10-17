@@ -1,10 +1,10 @@
 use crate::app::{Clock, InputState, State};
 use std::sync::Arc;
-use winit::event_loop::EventLoop;
-use winit::{
-    application::ApplicationHandler, event::*, event_loop::ActiveEventLoop, keyboard::PhysicalKey,
-    window::Window,
-};
+use winit::application::ApplicationHandler;
+use winit::event::{KeyEvent, WindowEvent};
+use winit::event_loop::{ActiveEventLoop, EventLoop};
+use winit::keyboard::PhysicalKey;
+use winit::window::{Window, WindowId};
 
 pub struct App {
     state: Option<State>,
@@ -44,7 +44,7 @@ impl ApplicationHandler for App {
     fn window_event(
         &mut self,
         event_loop: &ActiveEventLoop,
-        _window_id: winit::window::WindowId,
+        _window_id: WindowId,
         event: WindowEvent,
     ) {
         let state = match &mut self.state {

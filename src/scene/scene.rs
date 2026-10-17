@@ -1,5 +1,8 @@
 use crate::assets::Model;
-use crate::scene::{self, Camera, CameraActionState, CameraController, Gizmos, Light};
+use crate::scene::{
+    Action, Camera, CameraActionState, CameraController, Gizmos, Light,
+};
+use glam::{Quat, Vec3};
 use std::time::Duration;
 
 pub struct Scene {
@@ -22,7 +25,7 @@ impl Scene {
         let camera = Camera::new(config.width, config.height);
         let camera_controller = CameraController::new(10.0);
         let light = Light::new(glam::vec3(2.0, 2.0, 2.0), glam::vec3(1.0, 1.0, 1.0));
-        let gizmos = scene::Gizmos::new();
+        let gizmos = Gizmos::new();
 
         Self {
             config,
@@ -43,12 +46,11 @@ impl Scene {
             .update_camera(&mut self.camera, actions, dt);
 
         let rotation_speed = 60.0_f32.to_radians();
-        let rotation =
-            glam::Quat::from_axis_angle(glam::Vec3::Y, rotation_speed * dt.as_secs_f32());
+        let rotation = Quat::from_axis_angle(Vec3::Y, rotation_speed * dt.as_secs_f32());
         self.light.direction = (rotation * self.light.direction).normalize();
 
         self.gizmos.clear();
-        if self.config.enable_gizmos && actions.is_active(scene::Action::ShowGizmos) {
+        if self.config.enable_gizmos && actions.is_active(Action::ShowGizmos) {
             let white = [1.0; 4];
             self.gizmos.add_model(&self.earth, white, &self.camera);
         }
