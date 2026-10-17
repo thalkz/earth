@@ -20,6 +20,7 @@ impl RenderScene {
         queue: &wgpu::Queue,
         scene: &scene::Scene,
         texture_bind_group_layout: &wgpu::BindGroupLayout,
+        sampler: &wgpu::Sampler,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
         light_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
@@ -27,6 +28,7 @@ impl RenderScene {
             device,
             queue,
             &texture_bind_group_layout,
+            sampler,
             &scene.earth,
         );
 

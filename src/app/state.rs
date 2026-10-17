@@ -38,6 +38,7 @@ impl State {
             &gpu.queue,
             &scene,
             &renderer.texture_bind_group_layout,
+            &renderer.default_sampler,
             &renderer.camera_bind_group_layout,
             &renderer.light_bind_group_layout,
         );

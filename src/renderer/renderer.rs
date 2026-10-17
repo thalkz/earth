@@ -8,10 +8,13 @@ pub struct Renderer {
     pub texture_bind_group_layout: wgpu::BindGroupLayout,
     pub camera_bind_group_layout: wgpu::BindGroupLayout,
     pub light_bind_group_layout: wgpu::BindGroupLayout,
+    pub default_sampler: wgpu::Sampler,
 }
 
 impl Renderer {
     pub fn new(device: &wgpu::Device, color_format: wgpu::TextureFormat) -> Self {
+        let default_sampler = gpu::Texture::create_sampler(device);
+
         let texture_bind_group_layout =
             device.create_bind_group_layout(&gpu::Texture::bind_group_layout());
 
@@ -37,6 +40,7 @@ impl Renderer {
             texture_bind_group_layout,
             camera_bind_group_layout,
             light_bind_group_layout,
+            default_sampler,
         }
     }
 

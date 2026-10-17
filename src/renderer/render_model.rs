@@ -23,6 +23,7 @@ impl RenderModel {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         texture_bind_group_layout: &wgpu::BindGroupLayout,
+        sampler: &wgpu::Sampler,
         model: &Model,
     ) -> Self {
         let materials = model
@@ -53,7 +54,7 @@ impl RenderModel {
                         },
                         wgpu::BindGroupEntry {
                             binding: 1,
-                            resource: wgpu::BindingResource::Sampler(&texture.sampler),
+                            resource: wgpu::BindingResource::Sampler(&sampler),
                         },
                     ],
                     label: Some(&format!("Material Bind Group {}", mat.name)),
