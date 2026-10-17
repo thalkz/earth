@@ -1,4 +1,5 @@
-use super::model::{ImageAsset, Material, Mesh, Model, Vertex};
+use super::model;
+use image;
 use image::GenericImageView;
 use std::{fs, io, path};
 
@@ -22,19 +23,19 @@ pub async fn load_binary(file_name: &str) -> anyhow::Result<Vec<u8>> {
     Ok(data)
 }
 
-pub async fn load_image(file_name: &str) -> anyhow::Result<ImageAsset> {
+pub async fn load_image(file_name: &str) -> anyhow::Result<model::ImageAsset> {
     let data = load_binary(file_name).await?;
     let img = image::load_from_memory(&data)?;
     let rgba = img.to_rgba8();
     let (width, height) = img.dimensions();
-    Ok(ImageAsset {
+    Ok(model::ImageAsset {
         width,
         height,
         data: rgba.into_raw(),
     })
 }
 
-pub async fn load_model(file_name: &str) -> anyhow::Result<Model> {
+pub async fn load_model(file_name: &str) -> anyhow::Result<model::Model> {
     let obj_text = load_string(file_name).await?;
     let obj_cursor = futures::io::Cursor::new(obj_text);
     let mut obj_reader = futures::io::BufReader::new(obj_cursor);
@@ -55,13 +56,17 @@ pub async fn load_model(file_name: &str) -> anyhow::Result<Model> {
 
     let mut materials = Vec::new();
     for m in obj_materials? {
-        if let Some(texture_filename) = m.diffuse_texture {
-            let diffuse_texture = load_image(&texture_filename).await?;
-            materials.push(Material {
-                name: m.name,
-                diffuse_texture,
-            });
-        }
+        let diffuse = if let Some(filename) = m.diffuse_texture {
+            model::MaterialDiffuse::Texture(load_image(&filename).await?)
+        } else {
+            let color = m.diffuse.unwrap_or([1.0, 1.0, 1.0]);
+            model::MaterialDiffuse::Color([color[0], color[1], color[2], 1.0])
+        };
+
+        materials.push(model::Material {
+            name: m.name,
+            diffuse,
+        });
     }
 
     let meshes = models
@@ -70,7 +75,7 @@ pub async fn load_model(file_name: &str) -> anyhow::Result<Model> {
             let vertices = (0..m.mesh.positions.len() / 3)
                 .map(|i| {
                     if m.mesh.normals.is_empty() {
-                        Vertex {
+                        model::Vertex {
                             position: [
                                 m.mesh.positions[i * 3],
                                 m.mesh.positions[i * 3 + 1],
@@ -83,7 +88,7 @@ pub async fn load_model(file_name: &str) -> anyhow::Result<Model> {
                             normal: [0.0, 0.0, 0.0],
                         }
                     } else {
-                        Vertex {
+                        model::Vertex {
                             position: [
                                 m.mesh.positions[i * 3],
                                 m.mesh.positions[i * 3 + 1],
@@ -103,7 +108,7 @@ pub async fn load_model(file_name: &str) -> anyhow::Result<Model> {
                 })
                 .collect::<Vec<_>>();
 
-            Mesh {
+            model::Mesh {
                 name: m.name,
                 vertices,
                 indices: m.mesh.indices,
@@ -112,5 +117,5 @@ pub async fn load_model(file_name: &str) -> anyhow::Result<Model> {
         })
         .collect::<Vec<_>>();
 
-    Ok(Model { meshes, materials })
+    Ok(model::Model { meshes, materials })
 }

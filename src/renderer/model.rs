@@ -1,4 +1,4 @@
-use crate::assets::{Model, Vertex};
+use crate::assets::{self, Model, Vertex};
 use crate::gpu::Texture;
 use wgpu::util::DeviceExt;
 
@@ -29,13 +29,18 @@ impl GpuModel {
             .materials
             .iter()
             .map(|mat| {
+                let image = match &mat.diffuse {
+                    assets::MaterialDiffuse::Texture(img) => img.clone(),
+                    assets::MaterialDiffuse::Color(rgba) => assets::ImageAsset::from_color(*rgba),
+                };
+
                 let texture = Texture::create_2d(
                     device,
                     queue,
-                    mat.diffuse_texture.width,
-                    mat.diffuse_texture.height,
+                    image.width,
+                    image.height,
                     wgpu::TextureFormat::Rgba8UnormSrgb,
-                    &mat.diffuse_texture.data,
+                    &image.data,
                     Some(&mat.name),
                 );
 
