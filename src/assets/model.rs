@@ -48,11 +48,3 @@ pub struct Vertex {
     pub tex_coords: [f32; 2],
     pub normal: [f32; 3],
 }
-
-impl Vertex {
-    pub const ZERO: Vertex = Vertex {
-        position: [0.0; 3],
-        tex_coords: [0.0; 2],
-        normal: [0.0; 3],
-    };
-}
