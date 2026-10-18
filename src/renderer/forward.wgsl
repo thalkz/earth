@@ -27,22 +27,29 @@ struct Light {
 @group(1) @binding(0)
 var<uniform> light: Light;
 
+@group(2) @binding(0)
+var texture_elevation: texture_2d<f32>;
+@group(2) @binding(1)
+var sampler_elevation: sampler;
+
 @vertex
 fn vs_main(
     vertex: VertexInput,
 ) -> VertexOutput {
+    let unit_position = normalize(vertex.position);
+    let uv = vertex.tex_coords;
+
+    let elevation = textureSampleLevel(texture_elevation, sampler_elevation, uv, 0.0).r;
+    let height_scale = 0.03;
+    let displaced_position = unit_position * (1.0 + elevation * height_scale);
+
     var out: VertexOutput;
-    out.clip_position = camera.view_proj * vec4<f32>(vertex.position, 1.0);
+    out.clip_position = camera.view_proj * vec4<f32>(displaced_position, 1.0);
     out.world_position = vertex.position;
     out.world_normal = vertex.normal;
     out.tex_coords = vertex.tex_coords;
     return out;
 }
-
-@group(2) @binding(0)
-var texture_elevation: texture_2d<f32>;
-@group(2) @binding(1)
-var sampler_elevation: sampler;
 
 @group(3) @binding(0)
 var texture_diffuse: texture_2d<f32>;
@@ -53,7 +60,7 @@ var sampler_diffuse: sampler;
 fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
     let object_color: vec4<f32> = textureSample(texture_diffuse, sampler_diffuse, vertex.tex_coords);
 
-    let ambient_strenght = 0.1;
+    let ambient_strenght = 0.4;
     let ambient_color = light.color * ambient_strenght;
 
     let diffuse_strength = max(dot(vertex.world_normal, light.direction), 0.0);
