@@ -9,6 +9,7 @@ struct VertexOutput {
     @location(0) tex_coords: vec2<f32>,
     @location(1) world_position: vec3<f32>,
     @location(2) world_normal: vec3<f32>,
+    @location(3) elevation: f32,
 };
 
 struct CameraUniform {
@@ -45,9 +46,10 @@ fn vs_main(
 
     var out: VertexOutput;
     out.clip_position = camera.view_proj * vec4<f32>(displaced_position, 1.0);
-    out.world_position = vertex.position;
+    out.world_position = displaced_position;
     out.world_normal = vertex.normal;
     out.tex_coords = vertex.tex_coords;
+    out.elevation = elevation;
     return out;
 }
 
@@ -58,16 +60,36 @@ var sampler_diffuse: sampler;
 
 @fragment
 fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
-    let object_color: vec4<f32> = textureSample(texture_diffuse, sampler_diffuse, vertex.tex_coords);
+    let diffuse_sample = textureSample(texture_diffuse, sampler_diffuse, vertex.tex_coords);
 
-    let ambient_strenght = 0.4;
-    let ambient_color = light.color * ambient_strenght;
+    let is_water = vertex.elevation <= 0.001;
+    var object_color = diffuse_sample;
+    if (is_water) {
+        object_color = vec4<f32>(0.0, 0.1, 0.6, 1.0);
+    }
 
-    let diffuse_multiplier = 2.5;
-    let diffuse_strength = diffuse_multiplier * max(dot(vertex.world_normal, light.direction), 0.0);
+    let ambient_strength = 0.2;
+    let ambient_color = light.color * ambient_strength;
+
+    let normal = normalize(vertex.world_normal);
+    let light_dir = normalize(light.direction);
+    let diffuse_strength = max(dot(normal, light_dir), 0.0);
     let diffuse_color = light.color * diffuse_strength;
 
-    let result = (ambient_color + diffuse_color) * object_color.xyz;
+    // Specular lighting (sun glint on water only)
+    var specular_color = vec3<f32>(0.0, 0.0, 0.0);
+    if (is_water && diffuse_strength > 0.0) {
+        let view_dir = normalize(camera.view_pos.xyz - vertex.world_position);
+        let half_dir = normalize(light_dir + view_dir);
+        let spec_angle = max(dot(normal, half_dir), 0.0);
+        let shininess = 64.0;
+        let specular_strength = 0.8;
+        let specular_factor = pow(spec_angle, shininess);
+        let terminator_fade = smoothstep(0.0, 0.05, diffuse_strength);
+        specular_color = light.color * (specular_factor * specular_strength * terminator_fade);
+    }
+
+    let result = (ambient_color + diffuse_color) * object_color.xyz + specular_color;
 
     return vec4<f32>(result, object_color.a);
 }
