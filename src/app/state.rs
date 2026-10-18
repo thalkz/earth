@@ -26,7 +26,7 @@ impl State {
         let renderer = Renderer::new(&gpu.device, surface.config.format);
 
         // let earth_model = assets::load_model("cube.obj").await?;
-        let earth = Earth::load(2048, "earth/elevation.raw", "earth/diffuse.raw").await?;
+        let earth = Earth::load(1024, "earth/elevation.raw", "earth/diffuse.raw").await?;
         println!("Earth loaded at {}ms", start.elapsed().as_millis());
 
         let scene_config = SceneConfig {
