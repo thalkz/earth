@@ -63,7 +63,8 @@ fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
     let ambient_strenght = 0.4;
     let ambient_color = light.color * ambient_strenght;
 
-    let diffuse_strength = max(dot(vertex.world_normal, light.direction), 0.0);
+    let diffuse_multiplier = 2.5;
+    let diffuse_strength = diffuse_multiplier * max(dot(vertex.world_normal, light.direction), 0.0);
     let diffuse_color = light.color * diffuse_strength;
 
     let result = (ambient_color + diffuse_color) * object_color.xyz;
