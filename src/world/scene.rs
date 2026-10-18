@@ -1,4 +1,4 @@
-use crate::assets::Model;
+use crate::assets::Earth;
 use crate::world::{Action, Camera, CameraActionState, CameraController, Gizmos, Light};
 use glam::{Quat, Vec3};
 use std::time::Duration;
@@ -8,7 +8,7 @@ pub struct Scene {
     pub camera: Camera,
     pub camera_controller: CameraController,
     pub light: Light,
-    pub earth: Model,
+    pub earth: Earth,
     pub gizmos: Gizmos,
 }
 
@@ -19,7 +19,7 @@ pub struct SceneConfig {
 }
 
 impl Scene {
-    pub fn new(config: SceneConfig, earth: Model) -> Self {
+    pub fn new(config: SceneConfig, earth: Earth) -> Self {
         let camera = Camera::new(config.width, config.height);
         let camera_controller = CameraController::new(10.0);
         let light = Light::new(glam::vec3(2.0, 2.0, 2.0), glam::vec3(1.0, 1.0, 1.0));
@@ -50,7 +50,8 @@ impl Scene {
         self.gizmos.clear();
         if self.config.enable_gizmos && actions.is_active(Action::ShowGizmos) {
             let white = [1.0; 4];
-            self.gizmos.add_model(&self.earth, white, &self.camera);
+            self.gizmos
+                .add_model(&self.earth.model, white, &self.camera);
         }
     }
 }

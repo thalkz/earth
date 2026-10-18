@@ -1,19 +1,20 @@
 use crate::gpu::{GpuContext, SurfaceHandler, Texture};
+use crate::renderer::ForwardPass;
 use crate::renderer::gizmos::GizmosPass;
 use crate::renderer::render_scene::{CameraUniform, LightUniform, RenderScene};
-use crate::renderer::ForwardPass;
 use wgpu::{
     BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType,
     BufferBindingType, Color, CommandEncoderDescriptor, Device, LoadOp, Operations,
-    RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
-    Sampler, SamplerBindingType, ShaderStages, StoreOp, TextureFormat, TextureSampleType,
-    TextureViewDimension, TextureViewDescriptor,
+    RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor, Sampler,
+    SamplerBindingType, ShaderStages, StoreOp, TextureFormat, TextureSampleType,
+    TextureViewDescriptor, TextureViewDimension,
 };
 
 pub struct Renderer {
     forward_pass: ForwardPass,
     gizmos_pass: GizmosPass,
     pub texture_bind_group_layout: BindGroupLayout,
+    pub elevation_bind_group_layout: BindGroupLayout,
     pub camera_bind_group_layout: BindGroupLayout,
     pub light_bind_group_layout: BindGroupLayout,
     pub default_sampler: Sampler,
@@ -26,6 +27,9 @@ impl Renderer {
         let texture_bind_group_layout =
             device.create_bind_group_layout(&Texture::bind_group_layout());
 
+        let elevation_bind_group_layout =
+            device.create_bind_group_layout(&Texture::elevation_bind_group_layout());
+
         let camera_bind_group_layout =
             device.create_bind_group_layout(&CameraUniform::bind_group_layout());
 
@@ -36,6 +40,7 @@ impl Renderer {
             device,
             color_format,
             &texture_bind_group_layout,
+            &elevation_bind_group_layout,
             &camera_bind_group_layout,
             &light_bind_group_layout,
         );
@@ -46,6 +51,7 @@ impl Renderer {
             forward_pass,
             gizmos_pass,
             texture_bind_group_layout,
+            elevation_bind_group_layout,
             camera_bind_group_layout,
             light_bind_group_layout,
             default_sampler,
@@ -107,6 +113,7 @@ impl Renderer {
                 &render_scene.render_earth,
                 &render_scene.camera_bind_group,
                 &render_scene.light_bind_group,
+                &render_scene.elevation_bind_group,
             );
 
             if render_scene.render_gizmos.vertex_count > 0 {
@@ -147,6 +154,30 @@ impl Texture {
                 },
             ],
             label: Some("texture_bind_group_layout"),
+        }
+    }
+
+    fn elevation_bind_group_layout<'a>() -> BindGroupLayoutDescriptor<'a> {
+        BindGroupLayoutDescriptor {
+            entries: &[
+                BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::VERTEX_FRAGMENT,
+                    ty: BindingType::Texture {
+                        multisampled: false,
+                        view_dimension: TextureViewDimension::D2,
+                        sample_type: TextureSampleType::Float { filterable: true },
+                    },
+                    count: None,
+                },
+                BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: ShaderStages::VERTEX_FRAGMENT,
+                    ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ],
+            label: Some("elevation_bind_group_layout"),
         }
     }
 }

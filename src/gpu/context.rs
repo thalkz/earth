@@ -1,7 +1,7 @@
 use crate::gpu::SurfaceHandler;
 use std::sync::Arc;
 use wgpu::{
-    Adapter, Backends, Device, DeviceDescriptor, ExperimentalFeatures, Features, Instance,
+    Adapter, Backends, Device, DeviceDescriptor, ExperimentalFeatures, Instance,
     InstanceDescriptor, Limits, PowerPreference, Queue, RequestAdapterOptions, Surface, Trace,
 };
 use winit::window::Window;
@@ -31,7 +31,7 @@ impl GpuContext {
         let (device, queue) = adapter
             .request_device(&DeviceDescriptor {
                 label: Some("Primary Device"),
-                required_features: Features::empty(),
+                required_features: wgpu::Features::TEXTURE_FORMAT_16BIT_NORM, // used for elevation sampling
                 experimental_features: ExperimentalFeatures::disabled(),
                 required_limits: Limits::default(),
                 memory_hints: Default::default(),

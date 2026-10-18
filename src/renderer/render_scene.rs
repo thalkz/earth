@@ -1,10 +1,12 @@
+use crate::assets::ImageAsset;
+use crate::gpu::Texture;
 use crate::renderer::{RenderGizmos, RenderModel};
 use crate::world::{Camera, Light, Scene};
 use glam::Mat4;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{
-    BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, Buffer, BufferUsages, Device,
-    Queue, Sampler,
+    BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindingResource, Buffer,
+    BufferUsages, Device, Queue, Sampler, TextureFormat,
 };
 
 pub struct RenderScene {
@@ -14,6 +16,7 @@ pub struct RenderScene {
     pub camera_bind_group: BindGroup,
     pub light_buffer: Buffer,
     pub light_bind_group: BindGroup,
+    pub elevation_bind_group: BindGroup,
 }
 
 impl RenderScene {
@@ -23,6 +26,8 @@ impl RenderScene {
         scene: &Scene,
         texture_bind_group_layout: &BindGroupLayout,
         sampler: &Sampler,
+        elevation_bind_group_layout: &BindGroupLayout,
+        elevation_sampler: &Sampler,
         camera_bind_group_layout: &BindGroupLayout,
         light_bind_group_layout: &BindGroupLayout,
     ) -> Self {
@@ -31,7 +36,15 @@ impl RenderScene {
             queue,
             texture_bind_group_layout,
             sampler,
-            &scene.earth,
+            &scene.earth.model,
+        );
+
+        let elevation_bind_group = create_elevation_texture(
+            device,
+            queue,
+            elevation_bind_group_layout,
+            elevation_sampler,
+            &scene.earth.elevation,
         );
 
         let mut render_gizmos = RenderGizmos::new(device);
@@ -78,6 +91,7 @@ impl RenderScene {
             camera_bind_group,
             light_buffer,
             light_bind_group,
+            elevation_bind_group,
         }
     }
 
@@ -100,6 +114,40 @@ impl RenderScene {
 
         self.render_gizmos.update(device, queue, &scene.gizmos);
     }
+}
+
+fn create_elevation_texture(
+    device: &Device,
+    queue: &Queue,
+    texture_bind_group_layout: &BindGroupLayout,
+    sampler: &Sampler,
+    image: &ImageAsset,
+) -> BindGroup {
+    let elevation_texture = Texture::create_2d(
+        device,
+        queue,
+        image.width,
+        image.height,
+        TextureFormat::R16Unorm,
+        &image.data,
+        Some("elevation"),
+    );
+
+    let texture_bind_group = device.create_bind_group(&BindGroupDescriptor {
+        layout: texture_bind_group_layout,
+        entries: &[
+            BindGroupEntry {
+                binding: 0,
+                resource: BindingResource::TextureView(&elevation_texture.view),
+            },
+            BindGroupEntry {
+                binding: 1,
+                resource: BindingResource::Sampler(sampler),
+            },
+        ],
+        label: Some("Elevation Bind Group"),
+    });
+    texture_bind_group
 }
 
 #[repr(C)]

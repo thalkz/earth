@@ -15,17 +15,17 @@ pub async fn load_string(file_name: &str) -> anyhow::Result<String> {
     Ok(txt)
 }
 
-pub async fn load_binary(file_name: &str) -> anyhow::Result<Vec<u8>> {
+pub async fn load_binary(filename: &str) -> anyhow::Result<Vec<u8>> {
     let data = {
-        let path = Path::new(OUT_DIR).join("res").join(file_name);
+        let path = Path::new(OUT_DIR).join("res").join(filename);
         fs::read(path)?
     };
 
     Ok(data)
 }
 
-pub async fn load_image(file_name: &str) -> anyhow::Result<ImageAsset> {
-    let data = load_binary(file_name).await?;
+pub async fn load_image(filename: &str) -> anyhow::Result<ImageAsset> {
+    let data = load_binary(filename).await?;
     let img = image::load_from_memory(&data)?;
     let rgba = img.to_rgba8();
     let (width, height) = img.dimensions();
@@ -36,9 +36,22 @@ pub async fn load_image(file_name: &str) -> anyhow::Result<ImageAsset> {
     })
 }
 
+pub async fn load_image_16(filename: &str) -> anyhow::Result<ImageAsset> {
+    let data = load_binary(filename).await?;
+    let img = image::load_from_memory(&data)?;
+    let luma = img.to_luma16();
+    let raw_bytes: Vec<u8> = bytemuck::cast_slice(&luma.into_raw()).to_vec();
+    let (width, height) = img.dimensions();
+    Ok(ImageAsset {
+        width,
+        height,
+        data: raw_bytes,
+    })
+}
+
 #[allow(dead_code)]
-pub async fn load_model(file_name: &str) -> anyhow::Result<Model> {
-    let obj_text = load_string(file_name).await?;
+pub async fn load_model(filename: &str) -> anyhow::Result<Model> {
+    let obj_text = load_string(filename).await?;
     let obj_cursor = futures::io::Cursor::new(obj_text);
     let mut obj_reader = futures::io::BufReader::new(obj_cursor);
 

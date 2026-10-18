@@ -1,5 +1,5 @@
 use crate::app::InputState;
-use crate::assets::Sphere;
+use crate::assets::Earth;
 use crate::gpu::{GpuContext, SurfaceHandler};
 use crate::renderer::{RenderScene, Renderer};
 use crate::world::{Scene, SceneConfig};
@@ -23,7 +23,7 @@ impl State {
         let renderer = Renderer::new(&gpu.device, surface.config.format);
 
         // let earth_model = assets::load_model("cube.obj").await?;
-        let sphere = Sphere::new(10);
+        let earth = Earth::load(1024, "earth/elevation.png", "earth/diffuse.png").await?;
 
         let scene_config = SceneConfig {
             width: surface.config.width,
@@ -31,13 +31,15 @@ impl State {
             enable_gizmos: true,
         };
 
-        let scene = Scene::new(scene_config, sphere.model);
+        let scene = Scene::new(scene_config, earth);
 
         let render_scene = RenderScene::new(
             &gpu.device,
             &gpu.queue,
             &scene,
             &renderer.texture_bind_group_layout,
+            &renderer.default_sampler,
+            &renderer.elevation_bind_group_layout,
             &renderer.default_sampler,
             &renderer.camera_bind_group_layout,
             &renderer.light_bind_group_layout,

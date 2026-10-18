@@ -40,8 +40,13 @@ fn vs_main(
 }
 
 @group(2) @binding(0)
-var texture_diffuse: texture_2d<f32>;
+var texture_elevation: texture_2d<f32>;
 @group(2) @binding(1)
+var sampler_elevation: sampler;
+
+@group(3) @binding(0)
+var texture_diffuse: texture_2d<f32>;
+@group(3) @binding(1)
 var sampler_diffuse: sampler;
 
 @fragment

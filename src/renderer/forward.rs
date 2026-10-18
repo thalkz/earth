@@ -18,19 +18,20 @@ impl ForwardPass {
         device: &Device,
         color_format: TextureFormat,
         texture_layout: &BindGroupLayout,
+        elevation_layout: &BindGroupLayout,
         camera_layout: &BindGroupLayout,
         light_layout: &BindGroupLayout,
     ) -> Self {
-        let render_pipeline_layout =
-            device.create_pipeline_layout(&PipelineLayoutDescriptor {
-                label: Some("Forward Render Pipeline Layout"),
-                bind_group_layouts: &[
-                    Some(camera_layout),
-                    Some(light_layout),
-                    Some(texture_layout),
-                ],
-                immediate_size: 0,
-            });
+        let render_pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+            label: Some("Forward Render Pipeline Layout"),
+            bind_group_layouts: &[
+                Some(camera_layout),
+                Some(light_layout),
+                Some(elevation_layout),
+                Some(texture_layout),
+            ],
+            immediate_size: 0,
+        });
 
         let shader = device.create_shader_module(ShaderModuleDescriptor {
             label: Some("Forward Shader"),
@@ -90,15 +91,17 @@ impl ForwardPass {
         render_earth: &RenderModel,
         camera_bind_group: &'a BindGroup,
         light_bind_group: &'a BindGroup,
+        elevation_bind_group: &'a BindGroup,
     ) {
         render_pass.set_pipeline(&self.pipeline);
         render_pass.set_bind_group(0, camera_bind_group, &[]);
         render_pass.set_bind_group(1, light_bind_group, &[]);
+        render_pass.set_bind_group(2, elevation_bind_group, &[]);
         for mesh in &render_earth.meshes {
             let material = &render_earth.materials[mesh.material_index];
             render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
             render_pass.set_index_buffer(mesh.index_buffer.slice(..), IndexFormat::Uint32);
-            render_pass.set_bind_group(2, &material.bind_group, &[]);
+            render_pass.set_bind_group(3, &material.bind_group, &[]);
             render_pass.draw_indexed(0..mesh.num_elements, 0, 0..1);
         }
     }

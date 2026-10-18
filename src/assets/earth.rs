@@ -1,40 +1,63 @@
-use crate::assets::{Material, MaterialDiffuse, Mesh, Model, Vertex};
+use crate::{
+    assets::{self, ImageAsset, Material, MaterialDiffuse, Mesh, Model, Vertex},
+    geo,
+};
 use glam::{Vec2, Vec3};
 
 #[allow(unused)]
-pub struct Sphere {
+pub struct Earth {
     resolution: usize,
     pub model: Model,
+    pub elevation: ImageAsset,
 }
 
-impl Sphere {
-    pub fn new(resolution: usize) -> Sphere {
-        assert!(resolution >= 2, "resolution must be at least 2");
+impl Earth {
+    pub async fn load(
+        resolution: usize,
+        elevation_filename: &str,
+        diffuse_filename: &str,
+    ) -> anyhow::Result<Earth> {
+        assert!(resolution >= 2, "resolution must be at least 2"); // TODO return an error instead
+        let elevation = create_elevation(elevation_filename).await?;
 
-        Sphere {
+        let result = Earth {
             resolution: resolution,
             model: Model {
                 meshes: create_meshes(resolution),
-                materials: create_materials(),
+                materials: create_material(diffuse_filename).await?,
             },
-        }
+            elevation: elevation,
+        };
+        Ok(result)
     }
 }
 
-fn create_materials() -> Vec<Material> {
-    CUBE_FACE_MATERIALS
-        .map(|(name, color)| Material {
-            name: name.to_string(),
-            diffuse: MaterialDiffuse::Color(color),
-        })
-        .into()
+async fn create_elevation(filename: &str) -> anyhow::Result<ImageAsset> {
+    let elevation_image: ImageAsset = assets::load_image_16(filename).await?;
+    Ok(elevation_image)
 }
+
+async fn create_material(filename: &str) -> anyhow::Result<Vec<Material>> {
+    let elevation: ImageAsset = assets::load_image(filename).await?;
+    Ok(vec![Material {
+        name: "earth_elevation".to_string(),
+        diffuse: MaterialDiffuse::Texture(elevation),
+    }])
+}
+
+// fn create_materials() -> Vec<Material> {
+//     CUBE_FACE_MATERIALS
+//         .map(|(name, color)| Material {
+//             name: name.to_string(),
+//             diffuse: MaterialDiffuse::Color(color),
+//         })
+//         .into()
+// }
 
 fn create_meshes(resolution: usize) -> Vec<Mesh> {
     CUBE_FACE_NORMALS
         .iter()
-        .enumerate()
-        .map(|(i, &normal)| create_face(normal, resolution, i))
+        .map(|&normal| create_face(normal, resolution, 0))
         .collect()
 }
 
@@ -61,7 +84,7 @@ fn create_face(normal: Vec3, resolution: usize, material_index: usize) -> Mesh {
             let vertex = Vertex {
                 position: sphere_position.into(),
                 normal: sphere_position.into(),
-                tex_coords: [t.x, 1.0 - t.y],
+                tex_coords: geo::sphere_to_uv(sphere_position).into(),
             };
             vertices.push(vertex);
 
@@ -102,13 +125,4 @@ const CUBE_FACE_NORMALS: [Vec3; 6] = [
     Vec3::NEG_X,
     Vec3::NEG_Y,
     Vec3::NEG_Z,
-];
-
-const CUBE_FACE_MATERIALS: [(&str, [f32; 4]); 6] = [
-    ("red", [1.0, 0.0, 0.0, 1.0]),
-    ("green", [0.0, 1.0, 0.0, 1.0]),
-    ("blue", [0.0, 0.0, 1.0, 1.0]),
-    ("yellow", [0.5, 0.5, 0.0, 1.0]),
-    ("cyan", [0.0, 0.5, 0.5, 1.0]),
-    ("purple", [0.5, 0.0, 0.5, 1.0]),
 ];
