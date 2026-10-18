@@ -22,7 +22,7 @@ impl Scene {
     pub fn new(config: SceneConfig, earth: Earth) -> Self {
         let camera = Camera::new(config.width, config.height);
         let camera_controller = CameraController::new(10.0);
-        let light = Light::new(glam::vec3(2.0, 2.0, 2.0), glam::vec3(1.0, 1.0, 1.0));
+        let light = Light::new(glam::vec3(2.0, 0.0, 2.0), glam::vec3(1.0, 1.0, 1.0));
         let gizmos = Gizmos::new();
 
         Self {
