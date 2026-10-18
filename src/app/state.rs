@@ -4,7 +4,7 @@ use crate::gpu::{GpuContext, SurfaceHandler};
 use crate::renderer::{RenderScene, Renderer};
 use crate::world::{Scene, SceneConfig};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use winit::window::Window;
 
 pub struct State {
@@ -18,12 +18,16 @@ pub struct State {
 
 impl State {
     pub async fn new(window: Arc<Window>) -> anyhow::Result<Self> {
+        let start = Instant::now();
+        println!("Started");
         let (gpu, surface) = GpuContext::init_window(window.clone()).await?;
+        println!("Window initialized at {}ms", start.elapsed().as_millis());
 
         let renderer = Renderer::new(&gpu.device, surface.config.format);
 
         // let earth_model = assets::load_model("cube.obj").await?;
-        let earth = Earth::load(1024, "earth/elevation.png", "earth/diffuse.png").await?;
+        let earth = Earth::load(1024, "earth/elevation.raw", "earth/diffuse.raw").await?;
+        println!("Earth loaded at {}ms", start.elapsed().as_millis());
 
         let scene_config = SceneConfig {
             width: surface.config.width,
@@ -44,6 +48,7 @@ impl State {
             &renderer.camera_bind_group_layout,
             &renderer.light_bind_group_layout,
         );
+        println!("RenderScene created at {}ms", start.elapsed().as_millis());
 
         Ok(Self {
             window,

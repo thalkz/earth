@@ -19,13 +19,11 @@ impl Earth {
     ) -> anyhow::Result<Earth> {
         assert!(resolution >= 2, "resolution must be at least 2"); // TODO return an error instead
         let elevation = create_elevation(elevation_filename).await?;
-
+        let meshes = create_meshes(resolution);
+        let materials = create_material(diffuse_filename).await?;
         let result = Earth {
             resolution: resolution,
-            model: Model {
-                meshes: create_meshes(resolution),
-                materials: create_material(diffuse_filename).await?,
-            },
+            model: Model { meshes, materials },
             elevation: elevation,
         };
         Ok(result)
@@ -33,26 +31,17 @@ impl Earth {
 }
 
 async fn create_elevation(filename: &str) -> anyhow::Result<ImageAsset> {
-    let elevation_image: ImageAsset = assets::load_image_16(filename).await?;
+    let elevation_image: ImageAsset = assets::load_raw_image(filename)?;
     Ok(elevation_image)
 }
 
 async fn create_material(filename: &str) -> anyhow::Result<Vec<Material>> {
-    let elevation: ImageAsset = assets::load_image(filename).await?;
+    let elevation: ImageAsset = assets::load_raw_image(filename)?;
     Ok(vec![Material {
         name: "earth_elevation".to_string(),
         diffuse: MaterialDiffuse::Texture(elevation),
     }])
 }
-
-// fn create_materials() -> Vec<Material> {
-//     CUBE_FACE_MATERIALS
-//         .map(|(name, color)| Material {
-//             name: name.to_string(),
-//             diffuse: MaterialDiffuse::Color(color),
-//         })
-//         .into()
-// }
 
 fn create_meshes(resolution: usize) -> Vec<Mesh> {
     CUBE_FACE_NORMALS

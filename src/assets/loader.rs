@@ -6,7 +6,7 @@ use tobj::LoadOptions;
 
 const OUT_DIR: &str = env!("OUT_DIR");
 
-pub async fn load_string(file_name: &str) -> anyhow::Result<String> {
+pub fn load_string(file_name: &str) -> anyhow::Result<String> {
     let txt = {
         let path = Path::new(OUT_DIR).join("res").join(file_name);
         fs::read_to_string(path)?
@@ -15,17 +15,52 @@ pub async fn load_string(file_name: &str) -> anyhow::Result<String> {
     Ok(txt)
 }
 
-pub async fn load_binary(filename: &str) -> anyhow::Result<Vec<u8>> {
-    let data = {
-        let path = Path::new(OUT_DIR).join("res").join(filename);
-        fs::read(path)?
-    };
+pub const RAW_IMAGE_MAGIC: &[u8; 4] = b"EIMG";
 
+pub fn load_raw_image(filename: &str) -> anyhow::Result<ImageAsset> {
+    let mut data = load_binary(filename)?;
+    if data.len() < 16 || &data[0..4] != RAW_IMAGE_MAGIC {
+        anyhow::bail!("Invalid raw image header");
+    }
+    let width = u32::from_le_bytes(data[4..8].try_into()?);
+    let height = u32::from_le_bytes(data[8..12].try_into()?);
+    let bytes_per_pixel = u32::from_le_bytes(data[12..16].try_into()?);
+    let expected_len = (width as usize) * (height as usize) * (bytes_per_pixel as usize);
+    if data.len() - 16 != expected_len {
+        anyhow::bail!(
+            "Raw image payload length mismatch: expected {}, got {}",
+            expected_len,
+            data.len() - 16
+        );
+    }
+    data.drain(0..16);
+    Ok(ImageAsset {
+        width,
+        height,
+        data,
+    })
+}
+
+pub fn load_binary(filename: &str) -> anyhow::Result<Vec<u8>> {
+    let base_path = Path::new(OUT_DIR).join("res");
+    let path = base_path.join(filename);
+
+    // If caller requests a .png file, check if an optimized .raw counterpart exists
+    if filename.ends_with(".png") {
+        let raw_filename = filename.replace(".png", ".raw");
+        let raw_path = base_path.join(&raw_filename);
+        if raw_path.exists() {
+            let data = fs::read(raw_path)?;
+            return Ok(data);
+        }
+    }
+
+    let data = fs::read(path)?;
     Ok(data)
 }
 
-pub async fn load_image(filename: &str) -> anyhow::Result<ImageAsset> {
-    let data = load_binary(filename).await?;
+pub fn load_image(filename: &str) -> anyhow::Result<ImageAsset> {
+    let data = load_binary(filename)?;
     let img = image::load_from_memory(&data)?;
     let (width, height) = img.dimensions();
     let rgba = img.into_rgba8();
@@ -36,8 +71,9 @@ pub async fn load_image(filename: &str) -> anyhow::Result<ImageAsset> {
     })
 }
 
-pub async fn load_image_16(filename: &str) -> anyhow::Result<ImageAsset> {
-    let data = load_binary(filename).await?;
+#[allow(dead_code)]
+pub fn load_image_16(filename: &str) -> anyhow::Result<ImageAsset> {
+    let data = load_binary(filename)?;
     let img = image::load_from_memory(&data)?;
     let (width, height) = img.dimensions();
     let luma = img.into_luma16();
@@ -51,7 +87,7 @@ pub async fn load_image_16(filename: &str) -> anyhow::Result<ImageAsset> {
 
 #[allow(dead_code)]
 pub async fn load_model(filename: &str) -> anyhow::Result<Model> {
-    let obj_text = load_string(filename).await?;
+    let obj_text = load_string(filename)?;
     let obj_cursor = futures::io::Cursor::new(obj_text);
     let mut obj_reader = futures::io::BufReader::new(obj_cursor);
 
@@ -63,7 +99,7 @@ pub async fn load_model(filename: &str) -> anyhow::Result<Model> {
             ..Default::default()
         },
         |p| async move {
-            let mat_text = load_string(p.to_str().unwrap()).await.unwrap();
+            let mat_text = load_string(p.to_str().unwrap()).unwrap();
             tobj::load_mtl_buf(&mut io::BufReader::new(io::Cursor::new(mat_text)))
         },
     )
@@ -72,7 +108,7 @@ pub async fn load_model(filename: &str) -> anyhow::Result<Model> {
     let mut materials = Vec::new();
     for m in obj_materials? {
         let diffuse = if let Some(filename) = m.diffuse_texture {
-            MaterialDiffuse::Texture(load_image(&filename).await?)
+            MaterialDiffuse::Texture(load_image(&filename)?)
         } else {
             let color = m.diffuse.unwrap_or([1.0, 1.0, 1.0]);
             MaterialDiffuse::Color([color[0], color[1], color[2], 1.0])
