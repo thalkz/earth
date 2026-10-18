@@ -1,5 +1,5 @@
 use crate::app::InputState;
-use crate::assets;
+use crate::assets::Sphere;
 use crate::gpu::{GpuContext, SurfaceHandler};
 use crate::renderer::{RenderScene, Renderer};
 use crate::world::{Scene, SceneConfig};
@@ -23,7 +23,7 @@ impl State {
         let renderer = Renderer::new(&gpu.device, surface.config.format);
 
         // let earth_model = assets::load_model("cube.obj").await?;
-        let cube = assets::load_cube(10);
+        let sphere = Sphere::new(10);
 
         let scene_config = SceneConfig {
             width: surface.config.width,
@@ -31,7 +31,7 @@ impl State {
             enable_gizmos: true,
         };
 
-        let scene = Scene::new(scene_config, cube);
+        let scene = Scene::new(scene_config, sphere.model);
 
         let render_scene = RenderScene::new(
             &gpu.device,

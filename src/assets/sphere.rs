@@ -1,43 +1,44 @@
 use crate::assets::{Material, MaterialDiffuse, Mesh, Model, Vertex};
 use glam::{Vec2, Vec3};
 
-const CUBE_FACE_NORMALS: [Vec3; 6] = [
-    Vec3::X,
-    Vec3::Y,
-    Vec3::Z,
-    Vec3::NEG_X,
-    Vec3::NEG_Y,
-    Vec3::NEG_Z,
-];
+#[allow(unused)]
+pub struct Sphere {
+    resolution: usize,
+    pub model: Model,
+}
 
-const CUBE_FACE_MATERIALS: [(&str, [f32; 4]); 6] = [
-    ("red", [1.0, 0.0, 0.0, 1.0]),
-    ("green", [0.0, 1.0, 0.0, 1.0]),
-    ("blue", [0.0, 0.0, 1.0, 1.0]),
-    ("yellow", [0.5, 0.5, 0.0, 1.0]),
-    ("cyan", [0.0, 0.5, 0.5, 1.0]),
-    ("purple", [0.5, 0.0, 0.5, 1.0]),
-];
+impl Sphere {
+    pub fn new(resolution: usize) -> Sphere {
+        assert!(resolution >= 2, "resolution must be at least 2");
 
-pub fn load_cube(resolution: usize) -> Model {
-    assert!(resolution >= 2, "resolution must be at least 2");
+        Sphere {
+            resolution: resolution,
+            model: Model {
+                meshes: create_meshes(resolution),
+                materials: create_materials(),
+            },
+        }
+    }
+}
 
-    let meshes: Vec<Mesh> = CUBE_FACE_NORMALS
-        .iter()
-        .enumerate()
-        .map(|(i, &normal)| create_sphere(normal, resolution, i))
-        .collect();
-    let materials = CUBE_FACE_MATERIALS
+fn create_materials() -> Vec<Material> {
+    CUBE_FACE_MATERIALS
         .map(|(name, color)| Material {
             name: name.to_string(),
             diffuse: MaterialDiffuse::Color(color),
         })
-        .into();
-
-    Model { meshes, materials }
+        .into()
 }
 
-fn create_sphere(normal: Vec3, resolution: usize, material_index: usize) -> Mesh {
+fn create_meshes(resolution: usize) -> Vec<Mesh> {
+    CUBE_FACE_NORMALS
+        .iter()
+        .enumerate()
+        .map(|(i, &normal)| create_face(normal, resolution, i))
+        .collect()
+}
+
+fn create_face(normal: Vec3, resolution: usize, material_index: usize) -> Mesh {
     let axis_u = Vec3::new(normal.y, normal.z, normal.x);
     let axis_v = normal.cross(axis_u);
 
@@ -93,3 +94,21 @@ fn to_sphere_point(from: Vec3) -> Vec3 {
     let z = from.z * (1.0 - (x2 + y2) / 2.0 + (x2 * y2) / 3.0).sqrt();
     Vec3 { x, y, z }
 }
+
+const CUBE_FACE_NORMALS: [Vec3; 6] = [
+    Vec3::X,
+    Vec3::Y,
+    Vec3::Z,
+    Vec3::NEG_X,
+    Vec3::NEG_Y,
+    Vec3::NEG_Z,
+];
+
+const CUBE_FACE_MATERIALS: [(&str, [f32; 4]); 6] = [
+    ("red", [1.0, 0.0, 0.0, 1.0]),
+    ("green", [0.0, 1.0, 0.0, 1.0]),
+    ("blue", [0.0, 0.0, 1.0, 1.0]),
+    ("yellow", [0.5, 0.5, 0.0, 1.0]),
+    ("cyan", [0.0, 0.5, 0.5, 1.0]),
+    ("purple", [0.5, 0.0, 0.5, 1.0]),
+];
