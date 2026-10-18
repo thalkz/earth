@@ -58,6 +58,7 @@ impl ApplicationHandler for App {
             WindowEvent::RedrawRequested => {
                 let dt = self.clock.tick();
                 state.update(dt, &self.input);
+                self.input.clear_frame_deltas();
                 match state.render() {
                     Ok(_) => {}
                     Err(e) => {
@@ -65,6 +66,28 @@ impl ApplicationHandler for App {
                         event_loop.exit();
                     }
                 }
+            }
+            WindowEvent::CursorMoved { position, .. } => {
+                self.input.update_cursor_position(glam::Vec2::new(
+                    position.x as f32,
+                    position.y as f32,
+                ));
+            }
+            WindowEvent::MouseInput {
+                state: btn_state,
+                button,
+                ..
+            } => {
+                self.input.update_mouse_button(button, btn_state);
+            }
+            WindowEvent::MouseWheel { delta, .. } => {
+                self.input.update_scroll(delta);
+            }
+            WindowEvent::PinchGesture { delta, .. } => {
+                self.input.update_pinch(delta as f32);
+            }
+            WindowEvent::ModifiersChanged(modifiers) => {
+                self.input.update_modifiers(modifiers.state());
             }
             WindowEvent::KeyboardInput {
                 event:
@@ -84,3 +107,4 @@ impl ApplicationHandler for App {
         }
     }
 }
+

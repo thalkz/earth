@@ -1,3 +1,4 @@
 pub mod latlng;
 
-pub use latlng::sphere_to_uv;
+pub use latlng::{sphere_to_uv, LatLng};
+
