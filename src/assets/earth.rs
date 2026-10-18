@@ -3,6 +3,7 @@ use crate::{
     geo,
 };
 use glam::{Vec2, Vec3};
+use rayon::prelude::*;
 
 #[allow(unused)]
 pub struct Earth {
@@ -18,37 +19,49 @@ impl Earth {
         diffuse_filename: &str,
     ) -> anyhow::Result<Earth> {
         assert!(resolution >= 2, "resolution must be at least 2"); // TODO return an error instead
-        let elevation = create_elevation(elevation_filename).await?;
-        let meshes = create_meshes(resolution);
-        let materials = create_material(diffuse_filename).await?;
+
+        let (elevation, (meshes, materials)) = rayon::join(
+            || create_elevation(elevation_filename),
+            || {
+                rayon::join(
+                    || create_meshes(resolution),
+                    || create_material(diffuse_filename),
+                )
+            },
+        );
+
+        let elevation = elevation?;
+        let materials = materials?;
+
         let result = Earth {
-            resolution: resolution,
+            resolution,
             model: Model { meshes, materials },
-            elevation: elevation,
+            elevation,
         };
         Ok(result)
     }
 }
 
-async fn create_elevation(filename: &str) -> anyhow::Result<ImageAsset> {
+fn create_elevation(filename: &str) -> anyhow::Result<ImageAsset> {
     let elevation_image: ImageAsset = assets::load_raw_image(filename)?;
     Ok(elevation_image)
 }
 
-async fn create_material(filename: &str) -> anyhow::Result<Vec<Material>> {
-    let elevation: ImageAsset = assets::load_raw_image(filename)?;
+fn create_material(filename: &str) -> anyhow::Result<Vec<Material>> {
+    let diffuse: ImageAsset = assets::load_raw_image(filename)?;
     Ok(vec![Material {
         name: "earth_elevation".to_string(),
-        diffuse: MaterialDiffuse::Texture(elevation),
+        diffuse: MaterialDiffuse::Texture(diffuse),
     }])
 }
 
 fn create_meshes(resolution: usize) -> Vec<Mesh> {
     CUBE_FACE_NORMALS
-        .iter()
+        .par_iter()
         .map(|&normal| create_face(normal, resolution, 0))
         .collect()
 }
+
 
 fn create_face(normal: Vec3, resolution: usize, material_index: usize) -> Mesh {
     let axis_u = Vec3::new(normal.y, normal.z, normal.x);
@@ -115,3 +128,23 @@ const CUBE_FACE_NORMALS: [Vec3; 6] = [
     Vec3::NEG_Y,
     Vec3::NEG_Z,
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Instant;
+
+    #[test]
+    fn test_parallel_earth_load() {
+        let start = Instant::now();
+        println!("STARTED");
+        let result = pollster::block_on(Earth::load(
+            1024,
+            "earth/elevation.raw",
+            "earth/diffuse.raw",
+        ));
+        assert!(result.is_ok());
+        println!("Earth loaded at {}ms in parallel", start.elapsed().as_millis());
+    }
+}
+
