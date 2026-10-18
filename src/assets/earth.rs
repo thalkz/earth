@@ -34,10 +34,7 @@ pub fn load_cube(resolution: usize) -> Model {
         })
         .into();
 
-    Model {
-        meshes,
-        materials,
-    }
+    Model { meshes, materials }
 }
 
 fn create_sphere(normal: Vec3, resolution: usize, material_index: usize) -> Mesh {
@@ -57,13 +54,13 @@ fn create_sphere(normal: Vec3, resolution: usize, material_index: usize) -> Mesh
         for x in 0..resolution {
             let t = Vec2::new(x as f32, y as f32) / (resolution - 1) as f32;
 
-            let position =
-                (normal + axis_u * (2.0 * t.x - 1.0) + axis_v * (2.0 * t.y - 1.0)).normalize();
+            let cube_position = normal + axis_u * (2.0 * t.x - 1.0) + axis_v * (2.0 * t.y - 1.0);
+            let sphere_position = to_sphere_point(cube_position);
 
             let vertex = Vertex {
-                position: position.into(),
+                position: sphere_position.into(),
+                normal: sphere_position.into(),
                 tex_coords: [t.x, 1.0 - t.y],
-                normal: position.into(),
             };
             vertices.push(vertex);
 
@@ -85,4 +82,14 @@ fn create_sphere(normal: Vec3, resolution: usize, material_index: usize) -> Mesh
         indices: triangles,
         material_index,
     }
+}
+
+fn to_sphere_point(from: Vec3) -> Vec3 {
+    let x2 = from.x * from.x;
+    let y2 = from.y * from.y;
+    let z2 = from.z * from.z;
+    let x = from.x * (1.0 - (y2 + z2) / 2.0 + (y2 * z2) / 3.0).sqrt();
+    let y = from.y * (1.0 - (x2 + z2) / 2.0 + (x2 * z2) / 3.0).sqrt();
+    let z = from.z * (1.0 - (x2 + y2) / 2.0 + (x2 * y2) / 3.0).sqrt();
+    Vec3 { x, y, z }
 }
