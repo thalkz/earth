@@ -27,8 +27,8 @@ pub async fn load_binary(filename: &str) -> anyhow::Result<Vec<u8>> {
 pub async fn load_image(filename: &str) -> anyhow::Result<ImageAsset> {
     let data = load_binary(filename).await?;
     let img = image::load_from_memory(&data)?;
-    let rgba = img.to_rgba8();
     let (width, height) = img.dimensions();
+    let rgba = img.into_rgba8();
     Ok(ImageAsset {
         width,
         height,
@@ -39,9 +39,9 @@ pub async fn load_image(filename: &str) -> anyhow::Result<ImageAsset> {
 pub async fn load_image_16(filename: &str) -> anyhow::Result<ImageAsset> {
     let data = load_binary(filename).await?;
     let img = image::load_from_memory(&data)?;
-    let luma = img.to_luma16();
-    let raw_bytes: Vec<u8> = bytemuck::cast_slice(&luma.into_raw()).to_vec();
     let (width, height) = img.dimensions();
+    let luma = img.into_luma16();
+    let raw_bytes: Vec<u8> = bytemuck::cast_slice(&luma.into_raw()).to_vec();
     Ok(ImageAsset {
         width,
         height,
