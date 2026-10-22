@@ -1,4 +1,4 @@
-use crate::app::{Clock, InputState, State};
+use crate::app::{Clock, FramerateLogger, InputState, State};
 use std::sync::Arc;
 use winit::application::ApplicationHandler;
 use winit::event::{KeyEvent, WindowEvent};
@@ -10,6 +10,7 @@ pub struct App {
     state: Option<State>,
     input: InputState,
     clock: Clock,
+    framerate_logger: FramerateLogger,
 }
 
 impl App {
@@ -18,6 +19,7 @@ impl App {
             state: None,
             input: InputState::new(),
             clock: Clock::new(),
+            framerate_logger: FramerateLogger::new(),
         }
     }
 }
@@ -57,6 +59,7 @@ impl ApplicationHandler for App {
             WindowEvent::Resized(size) => state.resize(size.width, size.height),
             WindowEvent::RedrawRequested => {
                 let dt = self.clock.tick();
+                self.framerate_logger.tick();
                 state.update(dt, &self.input);
                 self.input.clear_frame_deltas();
                 match state.render() {

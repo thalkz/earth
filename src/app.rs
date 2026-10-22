@@ -1,9 +1,11 @@
 mod app_handler;
+mod framerate_logger;
 mod input;
 mod state;
 mod time;
 
 use crate::app::app_handler::App;
+pub use framerate_logger::FramerateLogger;
 pub use input::InputState;
 pub use state::State;
 pub use time::Clock;
