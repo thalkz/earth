@@ -13,6 +13,10 @@ use wgpu::{
 pub struct Renderer {
     forward_pass: ForwardPass,
     gizmos_pass: GizmosPass,
+    pub bind_group_layouts: RendererBindGroupLayouts,
+}
+
+pub struct RendererBindGroupLayouts {
     pub texture_bind_group_layout: BindGroupLayout,
     pub elevation_bind_group_layout: BindGroupLayout,
     pub camera_bind_group_layout: BindGroupLayout,
@@ -50,11 +54,13 @@ impl Renderer {
         Self {
             forward_pass,
             gizmos_pass,
-            texture_bind_group_layout,
-            elevation_bind_group_layout,
-            camera_bind_group_layout,
-            light_bind_group_layout,
-            default_sampler,
+            bind_group_layouts: RendererBindGroupLayouts {
+                texture_bind_group_layout,
+                elevation_bind_group_layout,
+                camera_bind_group_layout,
+                light_bind_group_layout,
+                default_sampler,
+            },
         }
     }
 

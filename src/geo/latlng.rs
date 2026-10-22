@@ -12,7 +12,7 @@ impl LatLng {
         LatLng { lat, lng }
     }
 
-    pub fn to_uv(&self) -> Vec2 {
+    pub fn to_uv(self) -> Vec2 {
         let u = (self.lng / (2.0 * PI)) + 0.5;
         let v = 0.5 - (self.lat / PI);
         Vec2::new(1.0 - u, v)

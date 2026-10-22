@@ -1,20 +1,19 @@
 use glam::{Mat4, Vec3, Vec4};
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BoundingSphere {
     pub center: Vec3,
     pub radius: f32,
 }
 
-#[allow(dead_code)]
 impl BoundingSphere {
+    #[allow(dead_code)]
     pub fn new(center: Vec3, radius: f32) -> Self {
         Self { center, radius }
     }
 
     /// Computes a bounding sphere containing all given 3D positions.
-    pub fn from_points<'a, I>(points: I) -> Self
+    pub fn from_points<I>(points: I) -> Self
     where
         I: IntoIterator<Item = Vec3>,
     {
@@ -41,15 +40,14 @@ impl BoundingSphere {
     }
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Plane {
     pub normal: Vec3,
     pub distance: f32,
 }
 
-#[allow(dead_code)]
 impl Plane {
+    #[allow(dead_code)]
     pub fn new(normal: Vec3, distance: f32) -> Self {
         Self { normal, distance }
     }
@@ -192,7 +190,11 @@ mod tests {
         let angle_120 = 120.0f32.to_radians();
         let behind_horizon_pos = Vec3::new(angle_120.sin(), 0.0, angle_120.cos());
         let behind_horizon_sphere = BoundingSphere::new(behind_horizon_pos, 0.05);
-        assert!(occluder.is_sphere_behind_horizon(cam_dir, cam_horizon_angle, &behind_horizon_sphere));
+        assert!(occluder.is_sphere_behind_horizon(
+            cam_dir,
+            cam_horizon_angle,
+            &behind_horizon_sphere
+        ));
 
         // Patch at 45 degrees: visible
         let angle_45_pos = Vec3::new(2.0f32.sqrt() / 2.0, 0.0, 2.0f32.sqrt() / 2.0);

@@ -37,12 +37,7 @@ impl State {
             &gpu.device,
             &gpu.queue,
             &scene,
-            &renderer.texture_bind_group_layout,
-            &renderer.default_sampler,
-            &renderer.elevation_bind_group_layout,
-            &renderer.default_sampler,
-            &renderer.camera_bind_group_layout,
-            &renderer.light_bind_group_layout,
+            &renderer.bind_group_layouts,
         );
         println!("RenderScene created at {}ms", start.elapsed().as_millis());
 

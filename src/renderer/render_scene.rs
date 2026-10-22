@@ -1,6 +1,7 @@
 use crate::assets::ImageAsset;
 use crate::geo::{Frustum, HorizonOccluder};
 use crate::gpu::Texture;
+use crate::renderer::render_pass::RendererBindGroupLayouts;
 use crate::renderer::{RenderGizmos, RenderModel};
 use crate::world::{Camera, Light, Scene};
 use glam::Mat4;
@@ -27,26 +28,21 @@ impl RenderScene {
         device: &Device,
         queue: &Queue,
         scene: &Scene,
-        texture_bind_group_layout: &BindGroupLayout,
-        sampler: &Sampler,
-        elevation_bind_group_layout: &BindGroupLayout,
-        elevation_sampler: &Sampler,
-        camera_bind_group_layout: &BindGroupLayout,
-        light_bind_group_layout: &BindGroupLayout,
+        layouts: &RendererBindGroupLayouts,
     ) -> Self {
         let render_earth = RenderModel::from_model(
             device,
             queue,
-            texture_bind_group_layout,
-            sampler,
+            &layouts.texture_bind_group_layout,
+            &layouts.default_sampler,
             &scene.earth.model,
         );
 
         let elevation_bind_group = create_elevation_texture(
             device,
             queue,
-            elevation_bind_group_layout,
-            elevation_sampler,
+            &layouts.elevation_bind_group_layout,
+            &layouts.default_sampler,
             &scene.earth.elevation,
         );
 
@@ -63,7 +59,7 @@ impl RenderScene {
         });
 
         let camera_bind_group = device.create_bind_group(&BindGroupDescriptor {
-            layout: camera_bind_group_layout,
+            layout: &layouts.camera_bind_group_layout,
             entries: &[BindGroupEntry {
                 binding: 0,
                 resource: camera_buffer.as_entire_binding(),
@@ -79,7 +75,7 @@ impl RenderScene {
         });
 
         let light_bind_group = device.create_bind_group(&BindGroupDescriptor {
-            layout: light_bind_group_layout,
+            layout: &layouts.light_bind_group_layout,
             entries: &[BindGroupEntry {
                 binding: 0,
                 resource: light_buffer.as_entire_binding(),
@@ -89,14 +85,18 @@ impl RenderScene {
 
         let frustum = Frustum::from_view_projection(scene.camera.build_view_projection_matrix());
         let earth_occluder = HorizonOccluder::new(glam::Vec3::ZERO, 0.998);
-        let cam_horizon = earth_occluder.prepare_camera(scene.camera.eye);
+        let camera_horizon = earth_occluder.prepare_camera(scene.camera.eye);
 
         let mut visible_earth_meshes = Vec::with_capacity(render_earth.meshes.len());
         for (i, mesh) in render_earth.meshes.iter().enumerate() {
-            if let Some((cam_dir, cam_horizon_angle)) = cam_horizon {
-                if earth_occluder.is_sphere_behind_horizon(cam_dir, cam_horizon_angle, &mesh.bounding_sphere) {
-                    continue;
-                }
+            if let Some((camera_dir, camera_horizon_angle)) = camera_horizon
+                && earth_occluder.is_sphere_behind_horizon(
+                    camera_dir,
+                    camera_horizon_angle,
+                    &mesh.bounding_sphere,
+                )
+            {
+                continue;
             }
             if !frustum.contains_sphere(&mesh.bounding_sphere) {
                 continue;
@@ -121,14 +121,18 @@ impl RenderScene {
     pub fn update(&mut self, device: &Device, queue: &Queue, scene: &Scene) {
         self.frustum = Frustum::from_view_projection(scene.camera.build_view_projection_matrix());
         let earth_occluder = HorizonOccluder::new(glam::Vec3::ZERO, 0.998);
-        let cam_horizon = earth_occluder.prepare_camera(scene.camera.eye);
+        let camera_horizon = earth_occluder.prepare_camera(scene.camera.eye);
 
         self.visible_earth_meshes.clear();
         for (i, mesh) in self.render_earth.meshes.iter().enumerate() {
-            if let Some((cam_dir, cam_horizon_angle)) = cam_horizon {
-                if earth_occluder.is_sphere_behind_horizon(cam_dir, cam_horizon_angle, &mesh.bounding_sphere) {
-                    continue;
-                }
+            if let Some((camera_dir, cam_horizon_angle)) = camera_horizon
+                && earth_occluder.is_sphere_behind_horizon(
+                    camera_dir,
+                    cam_horizon_angle,
+                    &mesh.bounding_sphere,
+                )
+            {
+                continue;
             }
             if !self.frustum.contains_sphere(&mesh.bounding_sphere) {
                 continue;
@@ -172,7 +176,7 @@ fn create_elevation_texture(
         Some("elevation"),
     );
 
-    let texture_bind_group = device.create_bind_group(&BindGroupDescriptor {
+    device.create_bind_group(&BindGroupDescriptor {
         layout: texture_bind_group_layout,
         entries: &[
             BindGroupEntry {
@@ -185,8 +189,7 @@ fn create_elevation_texture(
             },
         ],
         label: Some("Elevation Bind Group"),
-    });
-    texture_bind_group
+    })
 }
 
 #[repr(C)]
