@@ -105,27 +105,141 @@ fn uv_to_sphere_point(u: f32, v: f32) -> Vec3 {
     Vec3::new(x, y, z)
 }
 
-fn convert_elevation_to_normal_elevation_rgba8(
-    input_path: &Path,
+struct GebcoTile {
+    filename: &'static str,
+    col: usize,
+    row: usize,
+}
+
+const GEBCO_TILES: [GebcoTile; 8] = [
+    GebcoTile {
+        filename: "gebco_2026_n90.0_s0.0_w-180.0_e-90.0_geotiff.tif",
+        col: 0,
+        row: 0,
+    },
+    GebcoTile {
+        filename: "gebco_2026_n90.0_s0.0_w-90.0_e0.0_geotiff.tif",
+        col: 1,
+        row: 0,
+    },
+    GebcoTile {
+        filename: "gebco_2026_n90.0_s0.0_w0.0_e90.0_geotiff.tif",
+        col: 2,
+        row: 0,
+    },
+    GebcoTile {
+        filename: "gebco_2026_n90.0_s0.0_w90.0_e180.0_geotiff.tif",
+        col: 3,
+        row: 0,
+    },
+    GebcoTile {
+        filename: "gebco_2026_n0.0_s-90.0_w-180.0_e-90.0_geotiff.tif",
+        col: 0,
+        row: 1,
+    },
+    GebcoTile {
+        filename: "gebco_2026_n0.0_s-90.0_w-90.0_e0.0_geotiff.tif",
+        col: 1,
+        row: 1,
+    },
+    GebcoTile {
+        filename: "gebco_2026_n0.0_s-90.0_w0.0_e90.0_geotiff.tif",
+        col: 2,
+        row: 1,
+    },
+    GebcoTile {
+        filename: "gebco_2026_n0.0_s-90.0_w90.0_e180.0_geotiff.tif",
+        col: 3,
+        row: 1,
+    },
+];
+
+const MAX_ELEVATION_METERS: f32 = 8848.86;
+
+fn convert_gebco_to_normal_elevation_rgba8(
+    input_dir: &Path,
     output_dds: &Path,
 ) -> anyhow::Result<()> {
     println!(
-        "Converting {:?} to RGBA8 normal+elevation DDS...",
-        input_path
+        "Converting GEBCO dataset from {:?} to RGBA8 normal+elevation DDS...",
+        input_dir
     );
     let start = Instant::now();
-    let img = image::open(input_path)?;
-    let luma = img.into_luma16();
-    let (width, height) = luma.dimensions();
-    let raw_u16 = luma.into_raw();
-    let w = width as usize;
-    let h = height as usize;
+
+    let width = 8192usize;
+    let height = 4096usize;
+    let tile_w = width / 4; // 2048
+    let tile_h = height / 2; // 2048
+
+    let mut elev_grid = vec![0.0f32; width * height];
+
+    for tile in &GEBCO_TILES {
+        let tile_path = input_dir.join(tile.filename);
+        println!("Loading GEBCO tile: {:?}", tile_path);
+        let tile_start = Instant::now();
+        let file = File::open(&tile_path)?;
+        let mut decoder = tiff::decoder::Decoder::new(file)?;
+        decoder = decoder.with_limits(tiff::decoder::Limits::unlimited());
+        let (sw_u32, sh_u32) = decoder.dimensions()?;
+        let data = match decoder.read_image()? {
+            tiff::decoder::DecodingResult::I16(d) => d,
+            _ => anyhow::bail!("Expected I16 GEBCO data in {:?}", tile_path),
+        };
+        let sw = sw_u32 as usize;
+        let sh = sh_u32 as usize;
+
+        // Downsample into a temporary tile buffer using Rayon
+        let mut tile_elev = vec![0.0f32; tile_w * tile_h];
+        tile_elev
+            .par_chunks_exact_mut(tile_w)
+            .enumerate()
+            .for_each(|(ty, row)| {
+                let v = (ty as f32 + 0.5) / tile_h as f32;
+                let sy_f = v * sh as f32 - 0.5;
+                let y0 = (sy_f.floor() as usize).clamp(0, sh - 1);
+                let y1 = (y0 + 1).min(sh - 1);
+                let fy = (sy_f - y0 as f32).clamp(0.0, 1.0);
+
+                for tx in 0..tile_w {
+                    let u = (tx as f32 + 0.5) / tile_w as f32;
+                    let sx_f = u * sw as f32 - 0.5;
+                    let x0 = (sx_f.floor() as usize).clamp(0, sw - 1);
+                    let x1 = (x0 + 1).min(sw - 1);
+                    let fx = (sx_f - x0 as f32).clamp(0.0, 1.0);
+
+                    let s00 = data[y0 * sw + x0] as f32;
+                    let s10 = data[y0 * sw + x1] as f32;
+                    let s01 = data[y1 * sw + x0] as f32;
+                    let s11 = data[y1 * sw + x1] as f32;
+
+                    let top = s00 * (1.0 - fx) + s10 * fx;
+                    let bot = s01 * (1.0 - fx) + s11 * fx;
+                    let elev = top * (1.0 - fy) + bot * fy;
+
+                    row[tx] = if elev > 0.0 { elev } else { 0.0 };
+                }
+            });
+
+        // Copy tile rows into the global elevation grid
+        for ty in 0..tile_h {
+            let gy = tile.row * tile_h + ty;
+            let gx_start = tile.col * tile_w;
+            let src_start = ty * tile_w;
+            let dst_start = gy * width + gx_start;
+            elev_grid[dst_start..dst_start + tile_w]
+                .copy_from_slice(&tile_elev[src_start..src_start + tile_w]);
+        }
+
+        println!(
+            "Tile {} loaded and resampled in {:?}",
+            tile.filename,
+            tile_start.elapsed()
+        );
+    }
 
     println!(
-        "Image loaded in {:?} ({}x{}). Computing normals in parallel with Rayon...",
-        start.elapsed(),
-        width,
-        height
+        "All tiles loaded in {:?}. Computing 3D normals in parallel with Rayon...",
+        start.elapsed()
     );
 
     let height_scale = 0.03f32;
@@ -135,31 +249,37 @@ fn convert_elevation_to_normal_elevation_rgba8(
         let u = (px as f32 + 0.5) / width as f32;
         let v = (py as f32 + 0.5) / height as f32;
         let p = uv_to_sphere_point(u, v);
-        let elev = raw_u16[py * w + px] as f32 / 65535.0;
-        p * (1.0 + elev * height_scale)
+        let elev_m = elev_grid[py * width + px];
+        let elev_norm = (elev_m / MAX_ELEVATION_METERS).clamp(0.0, 1.0);
+        p * (1.0 + elev_norm * height_scale)
     };
 
     // Allocate output RGBA8 buffer (4 bytes per pixel)
-    let mut rgba_bytes = vec![0u8; w * h * 4];
+    let mut rgba_bytes = vec![0u8; width * height * 4];
 
     // Process each scanline in parallel
     rgba_bytes
-        .par_chunks_exact_mut(w * 4)
+        .par_chunks_exact_mut(width * 4)
         .enumerate()
         .for_each(|(py, row)| {
             let py_north = if py > 0 { py - 1 } else { 0 };
-            let py_south = if py < h - 1 { py + 1 } else { h - 1 };
+            let py_south = if py < height - 1 { py + 1 } else { height - 1 };
 
-            for px in 0..w {
-                let px_west = (px + 1) % w;
-                let px_east = (px + w - 1) % w;
+            for px in 0..width {
+                let px_west = (px + 1) % width;
+                let px_east = (px + width - 1) % width;
 
                 let u = (px as f32 + 0.5) / width as f32;
                 let v = (py as f32 + 0.5) / height as f32;
                 let sphere_p = uv_to_sphere_point(u, v);
 
-                let raw_val = raw_u16[py * w + px];
-                let alpha_u8 = ((raw_val as f64 / 65535.0) * 255.0).round() as u8;
+                let elev_m = elev_grid[py * width + px];
+                let alpha_u8 = if elev_m <= 0.0 {
+                    0u8
+                } else {
+                    let elev_norm = (elev_m / MAX_ELEVATION_METERS).clamp(0.0, 1.0);
+                    ((elev_norm * 254.0).round() as u8 + 1).min(255)
+                };
 
                 let normal = if alpha_u8 == 0 {
                     // Water: unperturbed smooth sphere normal (aligns with shader is_water condition)
@@ -207,7 +327,7 @@ fn convert_elevation_to_normal_elevation_rgba8(
         output_dds
     );
 
-    write_dds_file(output_dds, width, height, &rgba_bytes)?;
+    write_dds_file(output_dds, width as u32, height as u32, &rgba_bytes)?;
 
     println!(
         "Done in {:?}! Saved {:?} ({}x{}, {} bytes)",
@@ -221,42 +341,111 @@ fn convert_elevation_to_normal_elevation_rgba8(
     Ok(())
 }
 
-fn convert_png_to_rgba8(
+fn convert_image_to_rgba8(
     input_path: &Path,
     output_dds: &Path,
 ) -> anyhow::Result<()> {
     println!("Converting {:?} to RGBA8 DDS...", input_path);
     let start = Instant::now();
-    let img = image::open(input_path)?;
-    let rgba = img.into_rgba8();
-    let (width, height) = rgba.dimensions();
-    let raw_bytes = rgba.into_raw();
 
-    write_dds_file(output_dds, width, height, &raw_bytes)?;
+    let mut reader = image::io::Reader::open(input_path)?;
+    reader.no_limits();
+    let img = reader.decode()?;
+    let (width, height) = (img.width(), img.height());
+
+    let (target_w, target_h, rgba_bytes) = if width > 8192 || height > 4096 {
+        println!(
+            "Image dimensions ({}x{}) exceed GPU limit (8192x4096). Resampling with Rayon...",
+            width, height
+        );
+        let resample_start = Instant::now();
+        let target_w = 8192u32;
+        let target_h = 4096u32;
+        let rgb = img.to_rgb8();
+        let src_raw = rgb.as_raw();
+        let sw = width as usize;
+        let sh = height as usize;
+        let tw = target_w as usize;
+        let th = target_h as usize;
+
+        let mut out_bytes = vec![0u8; tw * th * 4];
+        out_bytes
+            .par_chunks_exact_mut(tw * 4)
+            .enumerate()
+            .for_each(|(dy, row)| {
+                let v = (dy as f32 + 0.5) / th as f32;
+                let sy_f = v * sh as f32 - 0.5;
+                let y0 = (sy_f.floor() as usize).clamp(0, sh - 1);
+                let y1 = (y0 + 1).min(sh - 1);
+                let fy = (sy_f - y0 as f32).clamp(0.0, 1.0);
+
+                for dx in 0..tw {
+                    let u = (dx as f32 + 0.5) / tw as f32;
+                    let sx_f = u * sw as f32 - 0.5;
+                    let x0 = (sx_f.floor() as usize).clamp(0, sw - 1);
+                    let x1 = (x0 + 1) % sw;
+                    let fx = (sx_f - x0 as f32).clamp(0.0, 1.0);
+
+                    let idx00 = (y0 * sw + x0) * 3;
+                    let idx10 = (y0 * sw + x1) * 3;
+                    let idx01 = (y1 * sw + x0) * 3;
+                    let idx11 = (y1 * sw + x1) * 3;
+
+                    let off = dx * 4;
+                    for c in 0..3 {
+                        let c00 = src_raw[idx00 + c] as f32;
+                        let c10 = src_raw[idx10 + c] as f32;
+                        let c01 = src_raw[idx01 + c] as f32;
+                        let c11 = src_raw[idx11 + c] as f32;
+
+                        let top = c00 * (1.0 - fx) + c10 * fx;
+                        let bot = c01 * (1.0 - fx) + c11 * fx;
+                        let val = top * (1.0 - fy) + bot * fy;
+                        row[off + c] = val.round() as u8;
+                    }
+                    row[off + 3] = 255;
+                }
+            });
+        println!("Resampled in {:?}", resample_start.elapsed());
+        (target_w, target_h, out_bytes)
+    } else {
+        let rgba = img.into_rgba8();
+        (width, height, rgba.into_raw())
+    };
+
+    write_dds_file(output_dds, target_w, target_h, &rgba_bytes)?;
 
     println!(
         "Done in {:?}! Saved {:?} ({}x{}, {} bytes)",
         start.elapsed(),
         output_dds,
-        width,
-        height,
-        raw_bytes.len() + 128
+        target_w,
+        target_h,
+        rgba_bytes.len() + 128
     );
 
     Ok(())
 }
 
 fn main() -> anyhow::Result<()> {
-    let elev_png = Path::new("res/earth/elevation.png");
+    let gebco_res = Path::new("res/in/gebco_2026_geotiff");
+    let gebco_in = Path::new("in/gebco_2026_geotiff");
     let elev_dds = Path::new("res/earth/elevation.dds");
-    if elev_png.exists() {
-        convert_elevation_to_normal_elevation_rgba8(elev_png, elev_dds)?;
+
+    if gebco_res.exists() {
+        convert_gebco_to_normal_elevation_rgba8(gebco_res, elev_dds)?;
+    } else if gebco_in.exists() {
+        convert_gebco_to_normal_elevation_rgba8(gebco_in, elev_dds)?;
     }
 
-    let diff_png = Path::new("res/earth/diffuse.png");
+    let diff_tif = Path::new("res/in/diffuse.tif");
+    let diff_alt_tif = Path::new("in/diffuse.tif");
     let diff_dds = Path::new("res/earth/diffuse.dds");
-    if diff_png.exists() {
-        convert_png_to_rgba8(diff_png, diff_dds)?;
+
+    if diff_tif.exists() {
+        convert_image_to_rgba8(diff_tif, diff_dds)?;
+    } else if diff_alt_tif.exists() {
+        convert_image_to_rgba8(diff_alt_tif, diff_dds)?;
     }
 
     Ok(())

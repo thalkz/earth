@@ -23,16 +23,6 @@ pub fn load_dds_image(filename: &str) -> anyhow::Result<ImageAsset> {
 pub fn load_binary(filename: &str) -> anyhow::Result<Vec<u8>> {
     let base_path = Path::new(OUT_DIR).join("res");
     let path = base_path.join(filename);
-
-    // If caller requests a .png file, check if an optimized .dds counterpart exists
-    if filename.ends_with(".png") {
-        let dds_filename = filename.replace(".png", ".dds");
-        let dds_path = base_path.join(&dds_filename);
-        if dds_path.exists() {
-            return Ok(fs::read(dds_path)?);
-        }
-    }
-
     let data = fs::read(path)?;
     Ok(data)
 }
