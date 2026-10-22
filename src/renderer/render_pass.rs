@@ -111,6 +111,7 @@ impl Renderer {
             self.forward_pass.draw(
                 &mut render_pass,
                 &render_scene.render_earth,
+                &render_scene.frustum,
                 &render_scene.camera_bind_group,
                 &render_scene.light_bind_group,
                 &render_scene.elevation_bind_group,

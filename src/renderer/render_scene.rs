@@ -1,4 +1,5 @@
 use crate::assets::ImageAsset;
+use crate::geo::Frustum;
 use crate::gpu::Texture;
 use crate::renderer::{RenderGizmos, RenderModel};
 use crate::world::{Camera, Light, Scene};
@@ -17,6 +18,7 @@ pub struct RenderScene {
     pub light_buffer: Buffer,
     pub light_bind_group: BindGroup,
     pub elevation_bind_group: BindGroup,
+    pub frustum: Frustum,
 }
 
 impl RenderScene {
@@ -84,6 +86,8 @@ impl RenderScene {
             label: Some("light_bind_group"),
         });
 
+        let frustum = Frustum::from_view_projection(scene.camera.build_view_projection_matrix());
+
         Self {
             render_earth,
             render_gizmos,
@@ -92,11 +96,14 @@ impl RenderScene {
             light_buffer,
             light_bind_group,
             elevation_bind_group,
+            frustum,
         }
     }
 
     /// Called every frame to write updated positions/matrices to the existing buffers
     pub fn update(&mut self, device: &Device, queue: &Queue, scene: &Scene) {
+        self.frustum = Frustum::from_view_projection(scene.camera.build_view_projection_matrix());
+
         let mut camera_uniform = CameraUniform::new();
         camera_uniform.update_view_proj(&scene.camera);
         queue.write_buffer(

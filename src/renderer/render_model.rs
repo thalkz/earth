@@ -1,4 +1,5 @@
 use crate::assets::{ImageAsset, MaterialDiffuse, Model, Vertex};
+use crate::geo::BoundingSphere;
 use crate::gpu::Texture;
 use std::mem;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
@@ -18,6 +19,7 @@ pub struct RenderMesh {
     pub index_buffer: Buffer,
     pub num_elements: u32,
     pub material_index: usize,
+    pub bounding_sphere: BoundingSphere,
 }
 
 pub struct RenderMaterial {
@@ -87,11 +89,18 @@ impl RenderModel {
                     usage: BufferUsages::INDEX,
                 });
 
+                let mut bounding_sphere = BoundingSphere::from_points(
+                    mesh.vertices.iter().map(|v| glam::Vec3::from(v.position)),
+                );
+                // Add safety margin for vertex shader displacements (e.g. elevation height scale)
+                bounding_sphere.radius *= 1.05;
+
                 RenderMesh {
                     vertex_buffer,
                     index_buffer,
                     num_elements: mesh.indices.len() as u32,
                     material_index: mesh.material_index,
+                    bounding_sphere,
                 }
             })
             .collect();
