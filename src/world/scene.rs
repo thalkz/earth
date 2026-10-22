@@ -31,7 +31,7 @@ impl Scene {
         let light = Light::new(glam::vec3(2.0, 0.0, 2.0), glam::vec3(1.0, 1.0, 1.0));
         let gizmos = Gizmos::new();
 
-        let earth = Earth::load(1024, "earth/elevation.raw", "earth/diffuse.raw").await?;
+        let earth = Earth::load(512, 4, "earth/elevation.raw", "earth/diffuse.raw").await?;
 
         Ok(Self {
             config,

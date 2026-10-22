@@ -7,7 +7,8 @@ use rayon::prelude::*;
 
 #[allow(unused)]
 pub struct Earth {
-    resolution: usize,
+    pub resolution: usize,
+    pub subdivisions: usize,
     pub model: Model,
     pub elevation: ImageAsset,
 }
@@ -15,16 +16,18 @@ pub struct Earth {
 impl Earth {
     pub async fn load(
         resolution: usize,
+        subdivisions: usize,
         elevation_filename: &str,
         diffuse_filename: &str,
     ) -> anyhow::Result<Earth> {
         assert!(resolution >= 2, "resolution must be at least 2"); // TODO return an error instead
+        assert!(subdivisions >= 1, "subdivisions must be at least 1");
 
         let (elevation, (meshes, materials)) = rayon::join(
             || create_elevation(elevation_filename),
             || {
                 rayon::join(
-                    || create_meshes(resolution),
+                    || create_meshes(resolution, subdivisions),
                     || create_material(diffuse_filename),
                 )
             },
@@ -35,8 +38,9 @@ impl Earth {
 
         let result = Earth {
             resolution,
-            model: Model { meshes, materials },
+            subdivisions,
             elevation,
+            model: Model { meshes, materials },
         };
         Ok(result)
     }
@@ -55,15 +59,27 @@ fn create_material(filename: &str) -> anyhow::Result<Vec<Material>> {
     }])
 }
 
-fn create_meshes(resolution: usize) -> Vec<Mesh> {
+fn create_meshes(resolution: usize, subdivisions: usize) -> Vec<Mesh> {
     CUBE_FACE_NORMALS
         .par_iter()
-        .map(|&normal| create_face(normal, resolution, 0))
+        .flat_map(|&normal| {
+            (0..subdivisions).into_par_iter().flat_map(move |part_y| {
+                (0..subdivisions).into_par_iter().map(move |part_x| {
+                    create_face_part(normal, part_x, part_y, subdivisions, resolution, 0)
+                })
+            })
+        })
         .collect()
 }
 
-
-fn create_face(normal: Vec3, resolution: usize, material_index: usize) -> Mesh {
+fn create_face_part(
+    normal: Vec3,
+    part_x: usize,
+    part_y: usize,
+    subdivisions: usize,
+    resolution: usize,
+    material_index: usize,
+) -> Mesh {
     let axis_u = Vec3::new(normal.y, normal.z, normal.x);
     let axis_v = normal.cross(axis_u);
 
@@ -78,7 +94,8 @@ fn create_face(normal: Vec3, resolution: usize, material_index: usize) -> Mesh {
 
     for y in 0..resolution {
         for x in 0..resolution {
-            let t = Vec2::new(x as f32, y as f32) / (resolution - 1) as f32;
+            let local_t = Vec2::new(x as f32, y as f32) / (resolution - 1) as f32;
+            let t = (Vec2::new(part_x as f32, part_y as f32) + local_t) / subdivisions as f32;
 
             let cube_position = normal + axis_u * (2.0 * t.x - 1.0) + axis_v * (2.0 * t.y - 1.0);
             let sphere_position = to_sphere_point(cube_position);
@@ -103,7 +120,7 @@ fn create_face(normal: Vec3, resolution: usize, material_index: usize) -> Mesh {
     }
 
     Mesh {
-        name: "cube_face".to_string(),
+        name: format!("cube_face_{normal:?}_{part_x}_{part_y}"),
         vertices,
         indices: triangles,
         material_index,
@@ -139,12 +156,33 @@ mod tests {
         let start = Instant::now();
         println!("STARTED");
         let result = pollster::block_on(Earth::load(
-            1024,
+            64,
+            2,
             "earth/elevation.raw",
             "earth/diffuse.raw",
         ));
         assert!(result.is_ok());
-        println!("Earth loaded at {}ms in parallel", start.elapsed().as_millis());
+        let earth = result.unwrap();
+        // 6 faces * 2 * 2 parts = 24 meshes
+        assert_eq!(earth.model.meshes.len(), 24);
+        println!(
+            "Earth loaded at {}ms in parallel",
+            start.elapsed().as_millis()
+        );
+    }
+
+    #[test]
+    fn test_subdivision_mesh_counts() {
+        let meshes_1 = create_meshes(4, 1);
+        assert_eq!(meshes_1.len(), 6);
+
+        let meshes_2 = create_meshes(4, 2);
+        assert_eq!(meshes_2.len(), 24);
+
+        let meshes_3 = create_meshes(4, 3);
+        assert_eq!(meshes_3.len(), 54);
+
+        let meshes_4 = create_meshes(4, 4);
+        assert_eq!(meshes_4.len(), 96);
     }
 }
-
