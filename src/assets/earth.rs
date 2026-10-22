@@ -20,6 +20,14 @@ impl Earth {
         elevation_filename: &str,
         diffuse_filename: &str,
     ) -> anyhow::Result<Earth> {
+        let _span = tracing::info_span!(
+            "Earth::load",
+            resolution,
+            subdivisions,
+            elevation_filename,
+            diffuse_filename
+        )
+        .entered();
         assert!(resolution >= 2, "resolution must be at least 2"); // TODO return an error instead
         assert!(subdivisions >= 1, "subdivisions must be at least 1");
 
@@ -47,11 +55,13 @@ impl Earth {
 }
 
 fn create_elevation(filename: &str) -> anyhow::Result<ImageAsset> {
+    let _span = tracing::info_span!("create_elevation", filename).entered();
     let elevation_image: ImageAsset = assets::load_dds_image(filename)?;
     Ok(elevation_image)
 }
 
 fn create_material(filename: &str) -> anyhow::Result<Vec<Material>> {
+    let _span = tracing::info_span!("create_material", filename).entered();
     let diffuse: ImageAsset = assets::load_dds_image(filename)?;
     Ok(vec![Material {
         name: "earth_elevation".to_string(),
@@ -60,6 +70,7 @@ fn create_material(filename: &str) -> anyhow::Result<Vec<Material>> {
 }
 
 fn create_meshes(resolution: usize, subdivisions: usize) -> Vec<Mesh> {
+    let _span = tracing::info_span!("create_meshes", resolution, subdivisions).entered();
     CUBE_FACE_NORMALS
         .par_iter()
         .flat_map(|&normal| {

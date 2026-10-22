@@ -49,6 +49,7 @@ pub struct DdsHeaderDxt10 {
 }
 
 pub fn parse_dds(mut data: Vec<u8>) -> anyhow::Result<ImageAsset> {
+    let _span = tracing::trace_span!("parse_dds", bytes = data.len()).entered();
     if data.len() < 128 {
         anyhow::bail!("DDS file too small (less than 128 bytes)");
     }

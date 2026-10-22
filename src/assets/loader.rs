@@ -16,6 +16,7 @@ pub fn load_string(file_name: &str) -> anyhow::Result<String> {
 }
 
 pub fn load_dds_image(filename: &str) -> anyhow::Result<ImageAsset> {
+    let _span = tracing::trace_span!("load_dds_image", filename).entered();
     let data = load_binary(filename)?;
     dds::parse_dds(data)
 }

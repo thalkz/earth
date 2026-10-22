@@ -70,8 +70,14 @@ impl Renderer {
         surface: &mut SurfaceHandler,
         render_scene: &RenderScene,
     ) -> anyhow::Result<()> {
-        let Some(output) = surface.get_current_texture(&gpu.device)? else {
-            return Ok(());
+        let _span = tracing::trace_span!("Renderer::render").entered();
+
+        let output = {
+            let _span = tracing::trace_span!("get_current_texture").entered();
+            match surface.get_current_texture(&gpu.device)? {
+                Some(output) => output,
+                None => return Ok(()),
+            }
         };
 
         let view = output
@@ -85,6 +91,7 @@ impl Renderer {
             });
 
         {
+            let _pass_span = tracing::trace_span!("render_pass").entered();
             let mut render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
                 label: Some("Render Pass"),
                 color_attachments: &[Some(RenderPassColorAttachment {
@@ -114,16 +121,28 @@ impl Renderer {
                 multiview_mask: None,
             });
 
-            self.forward_pass.draw(
-                &mut render_pass,
-                &render_scene.render_earth,
-                &render_scene.visible_earth_meshes,
-                &render_scene.camera_bind_group,
-                &render_scene.light_bind_group,
-                &render_scene.elevation_bind_group,
-            );
+            {
+                let _forward_span = tracing::trace_span!(
+                    "forward_pass",
+                    visible_meshes = render_scene.visible_earth_meshes.len()
+                )
+                .entered();
+                self.forward_pass.draw(
+                    &mut render_pass,
+                    &render_scene.render_earth,
+                    &render_scene.visible_earth_meshes,
+                    &render_scene.camera_bind_group,
+                    &render_scene.light_bind_group,
+                    &render_scene.elevation_bind_group,
+                );
+            }
 
             if render_scene.render_gizmos.vertex_count > 0 {
+                let _gizmos_span = tracing::trace_span!(
+                    "gizmos_pass",
+                    vertex_count = render_scene.render_gizmos.vertex_count
+                )
+                .entered();
                 self.gizmos_pass.draw(
                     &mut render_pass,
                     &render_scene.render_gizmos,
@@ -132,8 +151,15 @@ impl Renderer {
             }
         }
 
-        gpu.queue.submit(std::iter::once(encoder.finish()));
-        gpu.queue.present(output);
+        {
+            let _span = tracing::trace_span!("queue_submit").entered();
+            gpu.queue.submit(std::iter::once(encoder.finish()));
+        }
+
+        {
+            let _span = tracing::trace_span!("queue_present").entered();
+            gpu.queue.present(output);
+        }
 
         Ok(())
     }

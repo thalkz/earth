@@ -17,12 +17,20 @@ pub struct State {
 
 impl State {
     pub async fn new(window: Arc<Window>) -> anyhow::Result<Self> {
+        let _span = tracing::info_span!("State::new").entered();
         let start = Instant::now();
-        println!("Started");
-        let (gpu, surface) = GpuContext::init_window(window.clone()).await?;
-        println!("Window initialized at {}ms", start.elapsed().as_millis());
+        tracing::info!("Initializing State");
 
-        let renderer = Renderer::new(&gpu.device, surface.config.format);
+        let (gpu, surface) = {
+            let _span = tracing::info_span!("init_gpu_and_surface").entered();
+            GpuContext::init_window(window.clone()).await?
+        };
+        tracing::info!("Window initialized at {}ms", start.elapsed().as_millis());
+
+        let renderer = {
+            let _span = tracing::info_span!("Renderer::new").entered();
+            Renderer::new(&gpu.device, surface.config.format)
+        };
 
         let scene_config = SceneConfig {
             width: surface.config.width,
@@ -30,16 +38,22 @@ impl State {
             enable_gizmos: true,
         };
 
-        let scene = Scene::load(scene_config).await?;
-        println!("Scene loaded at {}ms", start.elapsed().as_millis());
+        let scene = {
+            let _span = tracing::info_span!("Scene::load").entered();
+            Scene::load(scene_config).await?
+        };
+        tracing::info!("Scene loaded at {}ms", start.elapsed().as_millis());
 
-        let render_scene = RenderScene::new(
-            &gpu.device,
-            &gpu.queue,
-            &scene,
-            &renderer.bind_group_layouts,
-        );
-        println!("RenderScene created at {}ms", start.elapsed().as_millis());
+        let render_scene = {
+            let _span = tracing::info_span!("RenderScene::new").entered();
+            RenderScene::new(
+                &gpu.device,
+                &gpu.queue,
+                &scene,
+                &renderer.bind_group_layouts,
+            )
+        };
+        tracing::info!("RenderScene created at {}ms", start.elapsed().as_millis());
 
         Ok(Self {
             window,
@@ -52,11 +66,13 @@ impl State {
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
+        let _span = tracing::trace_span!("State::resize", width, height).entered();
         self.surface.resize(&self.gpu.device, width, height);
         self.scene.resize(width, height);
     }
 
     pub fn render(&mut self) -> anyhow::Result<()> {
+        let _span = tracing::trace_span!("State::render").entered();
         self.render_scene
             .update(&self.gpu.device, &self.gpu.queue, &self.scene);
         self.renderer
@@ -66,6 +82,7 @@ impl State {
     }
 
     pub fn update(&mut self, dt: Duration, input: &InputState) {
+        let _span = tracing::trace_span!("State::update").entered();
         self.scene.update(dt, input);
     }
 }

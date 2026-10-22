@@ -32,6 +32,7 @@ impl Default for App {
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        let _span = tracing::info_span!("App::resumed").entered();
         #[allow(unused_mut)]
         let mut window_attributes = Window::default_attributes();
         let window = Arc::new(
@@ -56,17 +57,27 @@ impl ApplicationHandler for App {
 
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
-            WindowEvent::Resized(size) => state.resize(size.width, size.height),
+            WindowEvent::Resized(size) => {
+                let _span = tracing::trace_span!("window_resized", width = size.width, height = size.height).entered();
+                state.resize(size.width, size.height);
+            }
             WindowEvent::RedrawRequested => {
+                let _frame_span = tracing::trace_span!("frame").entered();
                 let dt = self.clock.tick();
                 self.framerate_logger.tick();
-                state.update(dt, &self.input);
+                {
+                    let _update_span = tracing::trace_span!("update").entered();
+                    state.update(dt, &self.input);
+                }
                 self.input.clear_frame_deltas();
-                match state.render() {
-                    Ok(_) => {}
-                    Err(e) => {
-                        log::error!("{e}");
-                        event_loop.exit();
+                {
+                    let _render_span = tracing::trace_span!("render").entered();
+                    match state.render() {
+                        Ok(_) => {}
+                        Err(e) => {
+                            tracing::error!("{e}");
+                            event_loop.exit();
+                        }
                     }
                 }
             }

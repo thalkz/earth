@@ -6,7 +6,6 @@ edition = "2024"
 [dependencies]
 anyhow = "1.0"
 winit = { version = "0.30", features = ["android-native-activity"] }
-env_logger = "0.10"
 log = "0.4"
 wgpu = "30.0"
 pollster = "0.3"
@@ -17,6 +16,9 @@ futures = "0.3.34"
 image = { version = "0.24", default-features = false, features = ["jpeg", "tiff"] }
 tiff = "0.9"
 rayon = "1.10"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+tracing-perfetto = "0.1"
 
 [build-dependencies]
 anyhow = "1.0"

@@ -119,43 +119,60 @@ impl RenderScene {
 
     /// Called every frame to write updated positions/matrices to the existing buffers
     pub fn update(&mut self, device: &Device, queue: &Queue, scene: &Scene) {
-        self.frustum = Frustum::from_view_projection(scene.camera.build_view_projection_matrix());
-        let earth_occluder = HorizonOccluder::new(glam::Vec3::ZERO, 0.998);
-        let camera_horizon = earth_occluder.prepare_camera(scene.camera.eye);
+        let _span = tracing::trace_span!("RenderScene::update").entered();
 
-        self.visible_earth_meshes.clear();
-        for (i, mesh) in self.render_earth.meshes.iter().enumerate() {
-            if let Some((camera_dir, cam_horizon_angle)) = camera_horizon
-                && earth_occluder.is_sphere_behind_horizon(
-                    camera_dir,
-                    cam_horizon_angle,
-                    &mesh.bounding_sphere,
-                )
-            {
-                continue;
+        {
+            let _cull_span = tracing::trace_span!(
+                "culling",
+                total_meshes = self.render_earth.meshes.len()
+            )
+            .entered();
+
+            self.frustum =
+                Frustum::from_view_projection(scene.camera.build_view_projection_matrix());
+            let earth_occluder = HorizonOccluder::new(glam::Vec3::ZERO, 0.998);
+            let camera_horizon = earth_occluder.prepare_camera(scene.camera.eye);
+
+            self.visible_earth_meshes.clear();
+            for (i, mesh) in self.render_earth.meshes.iter().enumerate() {
+                if let Some((camera_dir, cam_horizon_angle)) = camera_horizon
+                    && earth_occluder.is_sphere_behind_horizon(
+                        camera_dir,
+                        cam_horizon_angle,
+                        &mesh.bounding_sphere,
+                    )
+                {
+                    continue;
+                }
+                if !self.frustum.contains_sphere(&mesh.bounding_sphere) {
+                    continue;
+                }
+                self.visible_earth_meshes.push(i);
             }
-            if !self.frustum.contains_sphere(&mesh.bounding_sphere) {
-                continue;
-            }
-            self.visible_earth_meshes.push(i);
         }
 
-        let mut camera_uniform = CameraUniform::new();
-        camera_uniform.update_view_proj(&scene.camera);
-        queue.write_buffer(
-            &self.camera_buffer,
-            0,
-            bytemuck::cast_slice(&[camera_uniform]),
-        );
+        {
+            let _buf_span = tracing::trace_span!("write_uniforms").entered();
+            let mut camera_uniform = CameraUniform::new();
+            camera_uniform.update_view_proj(&scene.camera);
+            queue.write_buffer(
+                &self.camera_buffer,
+                0,
+                bytemuck::cast_slice(&[camera_uniform]),
+            );
 
-        let light_uniform: LightUniform = scene.light.into();
-        queue.write_buffer(
-            &self.light_buffer,
-            0,
-            bytemuck::cast_slice(&[light_uniform]),
-        );
+            let light_uniform: LightUniform = scene.light.into();
+            queue.write_buffer(
+                &self.light_buffer,
+                0,
+                bytemuck::cast_slice(&[light_uniform]),
+            );
+        }
 
-        self.render_gizmos.update(device, queue, &scene.gizmos);
+        {
+            let _gizmos_span = tracing::trace_span!("update_gizmos").entered();
+            self.render_gizmos.update(device, queue, &scene.gizmos);
+        }
     }
 }
 
