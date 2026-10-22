@@ -200,7 +200,7 @@ fn convert_gebco_to_normal_elevation_rgba8(
                 let y1 = (y0 + 1).min(sh - 1);
                 let fy = (sy_f - y0 as f32).clamp(0.0, 1.0);
 
-                for tx in 0..tile_w {
+                for (tx, out_val) in row.iter_mut().enumerate() {
                     let u = (tx as f32 + 0.5) / tile_w as f32;
                     let sx_f = u * sw as f32 - 0.5;
                     let x0 = (sx_f.floor() as usize).clamp(0, sw - 1);
@@ -216,7 +216,7 @@ fn convert_gebco_to_normal_elevation_rgba8(
                     let bot = s01 * (1.0 - fx) + s11 * fx;
                     let elev = top * (1.0 - fy) + bot * fy;
 
-                    row[tx] = if elev > 0.0 { elev } else { 0.0 };
+                    *out_val = if elev > 0.0 { elev } else { 0.0 };
                 }
             });
 
@@ -278,7 +278,7 @@ fn convert_gebco_to_normal_elevation_rgba8(
                     0u8
                 } else {
                     let elev_norm = (elev_m / MAX_ELEVATION_METERS).clamp(0.0, 1.0);
-                    ((elev_norm * 254.0).round() as u8 + 1).min(255)
+                    (elev_norm * 254.0).round() as u8 + 1
                 };
 
                 let normal = if alpha_u8 == 0 {
