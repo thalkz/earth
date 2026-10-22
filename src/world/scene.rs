@@ -21,22 +21,26 @@ pub struct SceneConfig {
 }
 
 impl Scene {
-    pub fn new(config: SceneConfig, earth: Earth) -> Self {
+    pub async fn load(config: SceneConfig) -> anyhow::Result<Self> {
         let mut camera = Camera::new(config.width, config.height);
+
         let globe_camera = GlobeCamera::default();
         globe_camera.update_camera(&mut camera);
+
         let camera_controller = CameraController::new(globe_camera);
         let light = Light::new(glam::vec3(2.0, 0.0, 2.0), glam::vec3(1.0, 1.0, 1.0));
         let gizmos = Gizmos::new();
 
-        Self {
+        let earth = Earth::load(1024, "earth/elevation.raw", "earth/diffuse.raw").await?;
+
+        Ok(Self {
             config,
             camera,
             camera_controller,
             light,
             earth,
             gizmos,
-        }
+        })
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
@@ -62,4 +66,3 @@ impl Scene {
         }
     }
 }
-

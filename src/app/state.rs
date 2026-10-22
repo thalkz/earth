@@ -1,5 +1,4 @@
 use crate::app::InputState;
-use crate::assets::Earth;
 use crate::gpu::{GpuContext, SurfaceHandler};
 use crate::renderer::{RenderScene, Renderer};
 use crate::world::{Scene, SceneConfig};
@@ -25,17 +24,14 @@ impl State {
 
         let renderer = Renderer::new(&gpu.device, surface.config.format);
 
-        // let earth_model = assets::load_model("cube.obj").await?;
-        let earth = Earth::load(1024, "earth/elevation.raw", "earth/diffuse.raw").await?;
-        println!("Earth loaded at {}ms", start.elapsed().as_millis());
-
         let scene_config = SceneConfig {
             width: surface.config.width,
             height: surface.config.height,
             enable_gizmos: true,
         };
 
-        let scene = Scene::new(scene_config, earth);
+        let scene = Scene::load(scene_config).await?;
+        println!("Scene loaded at {}ms", start.elapsed().as_millis());
 
         let render_scene = RenderScene::new(
             &gpu.device,
