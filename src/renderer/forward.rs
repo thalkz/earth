@@ -1,5 +1,4 @@
 use crate::assets::Vertex;
-use crate::geo::Frustum;
 use crate::gpu::Texture;
 use crate::renderer::RenderModel;
 use wgpu::{
@@ -90,7 +89,7 @@ impl ForwardPass {
         &'a self,
         render_pass: &mut RenderPass<'a>,
         render_earth: &RenderModel,
-        frustum: &Frustum,
+        visible_mesh_indices: &[usize],
         camera_bind_group: &'a BindGroup,
         light_bind_group: &'a BindGroup,
         elevation_bind_group: &'a BindGroup,
@@ -99,18 +98,14 @@ impl ForwardPass {
         render_pass.set_bind_group(0, camera_bind_group, &[]);
         render_pass.set_bind_group(1, light_bind_group, &[]);
         render_pass.set_bind_group(2, elevation_bind_group, &[]);
-        let mut culled = 0;
-        for mesh in &render_earth.meshes {
-            if !frustum.contains_sphere(&mesh.bounding_sphere) {
-                culled += 1;
-                continue;
-            }
+
+        for &mesh_idx in visible_mesh_indices {
+            let mesh = &render_earth.meshes[mesh_idx];
             let material = &render_earth.materials[mesh.material_index];
             render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
             render_pass.set_index_buffer(mesh.index_buffer.slice(..), IndexFormat::Uint32);
             render_pass.set_bind_group(3, &material.bind_group, &[]);
             render_pass.draw_indexed(0..mesh.num_elements, 0, 0..1);
         }
-        println!("culled: {}/{}", culled, &render_earth.meshes.len())
     }
 }

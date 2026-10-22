@@ -1,5 +1,5 @@
 pub mod culling;
 pub mod latlng;
 
-pub use culling::{BoundingSphere, Frustum};
+pub use culling::{BoundingSphere, Frustum, HorizonOccluder};
 pub use latlng::{LatLng, sphere_to_uv};

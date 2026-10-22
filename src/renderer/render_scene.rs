@@ -1,5 +1,5 @@
 use crate::assets::ImageAsset;
-use crate::geo::Frustum;
+use crate::geo::{Frustum, HorizonOccluder};
 use crate::gpu::Texture;
 use crate::renderer::{RenderGizmos, RenderModel};
 use crate::world::{Camera, Light, Scene};
@@ -19,6 +19,7 @@ pub struct RenderScene {
     pub light_bind_group: BindGroup,
     pub elevation_bind_group: BindGroup,
     pub frustum: Frustum,
+    pub visible_earth_meshes: Vec<usize>,
 }
 
 impl RenderScene {
@@ -87,6 +88,18 @@ impl RenderScene {
         });
 
         let frustum = Frustum::from_view_projection(scene.camera.build_view_projection_matrix());
+        let earth_occluder = HorizonOccluder::new(glam::Vec3::ZERO, 0.998);
+
+        let mut visible_earth_meshes = Vec::with_capacity(render_earth.meshes.len());
+        for (i, mesh) in render_earth.meshes.iter().enumerate() {
+            if earth_occluder.is_sphere_behind_horizon(scene.camera.eye, &mesh.bounding_sphere) {
+                continue;
+            }
+            if !frustum.contains_sphere(&mesh.bounding_sphere) {
+                continue;
+            }
+            visible_earth_meshes.push(i);
+        }
 
         Self {
             render_earth,
@@ -97,12 +110,27 @@ impl RenderScene {
             light_bind_group,
             elevation_bind_group,
             frustum,
+            visible_earth_meshes,
         }
     }
 
     /// Called every frame to write updated positions/matrices to the existing buffers
     pub fn update(&mut self, device: &Device, queue: &Queue, scene: &Scene) {
         self.frustum = Frustum::from_view_projection(scene.camera.build_view_projection_matrix());
+        let earth_occluder = HorizonOccluder::new(glam::Vec3::ZERO, 0.998);
+
+        self.visible_earth_meshes.clear();
+        for (i, mesh) in self.render_earth.meshes.iter().enumerate() {
+            // 1. Horizon culling
+            if earth_occluder.is_sphere_behind_horizon(scene.camera.eye, &mesh.bounding_sphere) {
+                continue;
+            }
+            // 2. Frustum culling
+            if !self.frustum.contains_sphere(&mesh.bounding_sphere) {
+                continue;
+            }
+            self.visible_earth_meshes.push(i);
+        }
 
         let mut camera_uniform = CameraUniform::new();
         camera_uniform.update_view_proj(&scene.camera);

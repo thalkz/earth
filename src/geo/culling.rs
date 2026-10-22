@@ -116,9 +116,85 @@ impl Frustum {
     }
 }
 
+/// A spherical body (such as a planet) that can occlude objects behind its curvature.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct HorizonOccluder {
+    pub center: Vec3,
+    pub radius: f32,
+}
+
+impl HorizonOccluder {
+    pub fn new(center: Vec3, radius: f32) -> Self {
+        Self { center, radius }
+    }
+
+    /// Tests whether a bounding sphere is completely occluded behind the horizon of this body.
+    pub fn is_sphere_behind_horizon(&self, camera_pos: Vec3, sphere: &BoundingSphere) -> bool {
+        let cam_rel = camera_pos - self.center;
+        let cam_dist = cam_rel.length();
+        if cam_dist <= self.radius {
+            return false;
+        }
+
+        let p_rel = sphere.center - self.center;
+        let p_dist = p_rel.length();
+        if p_dist <= 0.0 {
+            return false;
+        }
+
+        let cam_dir = cam_rel / cam_dist;
+        let p_dir = p_rel / p_dist;
+
+        let theta_cam = (self.radius / cam_dist).clamp(0.0, 1.0).acos();
+
+        let patch_top = p_dist + sphere.radius;
+        let theta_patch = if patch_top > self.radius {
+            (self.radius / patch_top).clamp(0.0, 1.0).acos()
+        } else {
+            0.0
+        };
+
+        let alpha_patch = (sphere.radius / p_dist).clamp(0.0, 1.0).asin();
+
+        let max_angle = theta_cam + theta_patch + alpha_patch;
+        if max_angle >= std::f32::consts::PI {
+            return false;
+        }
+
+        cam_dir.dot(p_dir) < max_angle.cos()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_horizon_culling() {
+        let occluder = HorizonOccluder::new(Vec3::ZERO, 1.0);
+        let cam_pos = Vec3::new(0.0, 0.0, 5.0); // Looking from +Z towards origin
+
+        // Front of Earth (+Z): facing camera, should be visible
+        let front_sphere = BoundingSphere::new(Vec3::new(0.0, 0.0, 1.0), 0.05);
+        assert!(!occluder.is_sphere_behind_horizon(cam_pos, &front_sphere));
+
+        // Back of Earth (-Z): facing away, should be culled
+        let back_sphere = BoundingSphere::new(Vec3::new(0.0, 0.0, -1.0), 0.05);
+        assert!(occluder.is_sphere_behind_horizon(cam_pos, &back_sphere));
+
+        // Patch at 120 degrees (behind horizon):
+        // Camera horizon is 78.5 deg. Patch extends ~20.6 deg. Max visible angle is ~99.1 deg.
+        // At 120 deg, it is strictly behind the horizon and culled.
+        let angle_120 = 120.0f32.to_radians();
+        let behind_horizon_pos = Vec3::new(angle_120.sin(), 0.0, angle_120.cos());
+        let behind_horizon_sphere = BoundingSphere::new(behind_horizon_pos, 0.05);
+        assert!(occluder.is_sphere_behind_horizon(cam_pos, &behind_horizon_sphere));
+
+        // Patch at 45 degrees: visible
+        let angle_45_pos = Vec3::new(2.0f32.sqrt() / 2.0, 0.0, 2.0f32.sqrt() / 2.0);
+        let angle_45_sphere = BoundingSphere::new(angle_45_pos, 0.05);
+        assert!(!occluder.is_sphere_behind_horizon(cam_pos, &angle_45_sphere));
+    }
 
     #[test]
     fn test_bounding_sphere_from_points() {
