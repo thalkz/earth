@@ -27,12 +27,20 @@ impl SurfaceHandler {
             .copied()
             .unwrap_or(surface_caps.formats[0]);
 
+        let present_mode = if surface_caps.present_modes.contains(&PresentMode::Mailbox) {
+            PresentMode::Mailbox // Triple-buffering: drops stale frames rather than blocking the CPU
+        } else if surface_caps.present_modes.contains(&PresentMode::AutoVsync) {
+            PresentMode::AutoVsync // Gracefully handles late frames without stutter
+        } else {
+            PresentMode::Fifo
+        };
+
         let config = SurfaceConfiguration {
             usage: TextureUsages::RENDER_ATTACHMENT,
             format: surface_format,
             width: width.max(1),
             height: height.max(1),
-            present_mode: PresentMode::Fifo,
+            present_mode: present_mode,
             alpha_mode: surface_caps.alpha_modes[0],
             view_formats: vec![],
             desired_maximum_frame_latency: 2,
