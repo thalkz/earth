@@ -89,11 +89,14 @@ impl RenderScene {
 
         let frustum = Frustum::from_view_projection(scene.camera.build_view_projection_matrix());
         let earth_occluder = HorizonOccluder::new(glam::Vec3::ZERO, 0.998);
+        let cam_horizon = earth_occluder.prepare_camera(scene.camera.eye);
 
         let mut visible_earth_meshes = Vec::with_capacity(render_earth.meshes.len());
         for (i, mesh) in render_earth.meshes.iter().enumerate() {
-            if earth_occluder.is_sphere_behind_horizon(scene.camera.eye, &mesh.bounding_sphere) {
-                continue;
+            if let Some((cam_dir, cam_horizon_angle)) = cam_horizon {
+                if earth_occluder.is_sphere_behind_horizon(cam_dir, cam_horizon_angle, &mesh.bounding_sphere) {
+                    continue;
+                }
             }
             if !frustum.contains_sphere(&mesh.bounding_sphere) {
                 continue;
@@ -118,14 +121,15 @@ impl RenderScene {
     pub fn update(&mut self, device: &Device, queue: &Queue, scene: &Scene) {
         self.frustum = Frustum::from_view_projection(scene.camera.build_view_projection_matrix());
         let earth_occluder = HorizonOccluder::new(glam::Vec3::ZERO, 0.998);
+        let cam_horizon = earth_occluder.prepare_camera(scene.camera.eye);
 
         self.visible_earth_meshes.clear();
         for (i, mesh) in self.render_earth.meshes.iter().enumerate() {
-            // 1. Horizon culling
-            if earth_occluder.is_sphere_behind_horizon(scene.camera.eye, &mesh.bounding_sphere) {
-                continue;
+            if let Some((cam_dir, cam_horizon_angle)) = cam_horizon {
+                if earth_occluder.is_sphere_behind_horizon(cam_dir, cam_horizon_angle, &mesh.bounding_sphere) {
+                    continue;
+                }
             }
-            // 2. Frustum culling
             if !self.frustum.contains_sphere(&mesh.bounding_sphere) {
                 continue;
             }
