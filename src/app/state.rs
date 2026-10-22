@@ -57,11 +57,12 @@ impl State {
     }
 
     pub fn render(&mut self) -> anyhow::Result<()> {
-        self.window.request_redraw();
         self.render_scene
             .update(&self.gpu.device, &self.gpu.queue, &self.scene);
         self.renderer
-            .render(&self.gpu, &mut self.surface, &self.render_scene)
+            .render(&self.gpu, &mut self.surface, &self.render_scene)?;
+        self.window.request_redraw();
+        Ok(())
     }
 
     pub fn update(&mut self, dt: Duration, input: &InputState) {
