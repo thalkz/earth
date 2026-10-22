@@ -47,12 +47,12 @@ impl Earth {
 }
 
 fn create_elevation(filename: &str) -> anyhow::Result<ImageAsset> {
-    let elevation_image: ImageAsset = assets::load_raw_image(filename)?;
+    let elevation_image: ImageAsset = assets::load_dds_image(filename)?;
     Ok(elevation_image)
 }
 
 fn create_material(filename: &str) -> anyhow::Result<Vec<Material>> {
-    let diffuse: ImageAsset = assets::load_raw_image(filename)?;
+    let diffuse: ImageAsset = assets::load_dds_image(filename)?;
     Ok(vec![Material {
         name: "earth_elevation".to_string(),
         diffuse: MaterialDiffuse::Texture(diffuse),
@@ -158,8 +158,8 @@ mod tests {
         let result = pollster::block_on(Earth::load(
             64,
             2,
-            "earth/elevation.raw",
-            "earth/diffuse.raw",
+            "earth/elevation.dds",
+            "earth/diffuse.dds",
         ));
         assert!(result.is_ok());
         let earth = result.unwrap();

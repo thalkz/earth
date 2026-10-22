@@ -40,14 +40,17 @@ fn vs_main(
     let unit_position = normalize(vertex.position);
     let uv = vertex.tex_coords;
 
-    let elevation = textureSampleLevel(texture_elevation, sampler_elevation, uv, 0.0).r;
+    let elevation_sample = textureSampleLevel(texture_elevation, sampler_elevation, uv, 0.0);
+    let elevation = elevation_sample.a; // alpha channel is elevation
     let height_scale = 0.03;
     let displaced_position = unit_position * (1.0 + elevation * height_scale);
+
+    let normal = normalize(elevation_sample.rgb * 2.0 - vec3<f32>(1.0)); // rgb channels is world_normal
 
     var out: VertexOutput;
     out.clip_position = camera.view_proj * vec4<f32>(displaced_position, 1.0);
     out.world_position = displaced_position;
-    out.world_normal = vertex.normal;
+    out.world_normal = normal;
     out.tex_coords = vertex.tex_coords;
     out.elevation = elevation;
     return out;

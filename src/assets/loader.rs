@@ -1,4 +1,4 @@
-use crate::assets::{ImageAsset, Material, MaterialDiffuse, Mesh, Model, Vertex};
+use crate::assets::{ImageAsset, Material, MaterialDiffuse, Mesh, Model, Vertex, dds};
 use image::GenericImageView;
 use std::path::Path;
 use std::{fs, io};
@@ -15,43 +15,21 @@ pub fn load_string(file_name: &str) -> anyhow::Result<String> {
     Ok(txt)
 }
 
-pub const RAW_IMAGE_MAGIC: &[u8; 4] = b"EIMG";
-
-pub fn load_raw_image(filename: &str) -> anyhow::Result<ImageAsset> {
-    let mut data = load_binary(filename)?;
-    if data.len() < 16 || &data[0..4] != RAW_IMAGE_MAGIC {
-        anyhow::bail!("Invalid raw image header");
-    }
-    let width = u32::from_le_bytes(data[4..8].try_into()?);
-    let height = u32::from_le_bytes(data[8..12].try_into()?);
-    let bytes_per_pixel = u32::from_le_bytes(data[12..16].try_into()?);
-    let expected_len = (width as usize) * (height as usize) * (bytes_per_pixel as usize);
-    if data.len() - 16 != expected_len {
-        anyhow::bail!(
-            "Raw image payload length mismatch: expected {}, got {}",
-            expected_len,
-            data.len() - 16
-        );
-    }
-    data.drain(0..16);
-    Ok(ImageAsset {
-        width,
-        height,
-        data,
-    })
+pub fn load_dds_image(filename: &str) -> anyhow::Result<ImageAsset> {
+    let data = load_binary(filename)?;
+    dds::parse_dds(data)
 }
 
 pub fn load_binary(filename: &str) -> anyhow::Result<Vec<u8>> {
     let base_path = Path::new(OUT_DIR).join("res");
     let path = base_path.join(filename);
 
-    // If caller requests a .png file, check if an optimized .raw counterpart exists
+    // If caller requests a .png file, check if an optimized .dds counterpart exists
     if filename.ends_with(".png") {
-        let raw_filename = filename.replace(".png", ".raw");
-        let raw_path = base_path.join(&raw_filename);
-        if raw_path.exists() {
-            let data = fs::read(raw_path)?;
-            return Ok(data);
+        let dds_filename = filename.replace(".png", ".dds");
+        let dds_path = base_path.join(&dds_filename);
+        if dds_path.exists() {
+            return Ok(fs::read(dds_path)?);
         }
     }
 
@@ -68,20 +46,6 @@ pub fn load_image(filename: &str) -> anyhow::Result<ImageAsset> {
         width,
         height,
         data: rgba.into_raw(),
-    })
-}
-
-#[allow(dead_code)]
-pub fn load_image_16(filename: &str) -> anyhow::Result<ImageAsset> {
-    let data = load_binary(filename)?;
-    let img = image::load_from_memory(&data)?;
-    let (width, height) = img.dimensions();
-    let luma = img.into_luma16();
-    let raw_bytes: Vec<u8> = bytemuck::cast_slice(&luma.into_raw()).to_vec();
-    Ok(ImageAsset {
-        width,
-        height,
-        data: raw_bytes,
     })
 }
 

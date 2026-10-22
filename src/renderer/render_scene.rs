@@ -167,7 +167,7 @@ fn create_elevation_texture(
         queue,
         image.width,
         image.height,
-        TextureFormat::R16Unorm,
+        TextureFormat::Rgba8Unorm,
         &image.data,
         Some("elevation"),
     );
