@@ -8,8 +8,6 @@ struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) tex_coords: vec2<f32>,
     @location(1) world_position: vec3<f32>,
-    @location(2) world_normal: vec3<f32>,
-    @location(3) elevation: f32,
 };
 
 struct CameraUniform {
@@ -52,14 +50,10 @@ fn vs_main(
     let height_scale = 0.03;
     let displaced_position = unit_position * (1.0 + elevation * height_scale);
 
-    let normal = normalize(elevation_sample.rgb * 2.0 - vec3<f32>(1.0)); // rgb channels is world_normal
-
     var out: VertexOutput;
     out.clip_position = camera.view_proj * vec4<f32>(displaced_position, 1.0);
     out.world_position = displaced_position;
-    out.world_normal = normal;
     out.tex_coords = vertex.tex_coords;
-    out.elevation = elevation;
     return out;
 }
 
