@@ -172,7 +172,7 @@ fn create_elevation_texture(
         image.width,
         image.height,
         TextureFormat::Rgba8Unorm,
-        &image.data,
+        &image.mip_levels,
         Some("elevation"),
     );
 

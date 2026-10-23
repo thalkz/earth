@@ -49,7 +49,7 @@ impl RenderModel {
                     image.width,
                     image.height,
                     TextureFormat::Rgba8UnormSrgb,
-                    &image.data,
+                    &image.mip_levels,
                     Some(&mat.name),
                 );
 

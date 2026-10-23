@@ -13,11 +13,14 @@ const DDSD_HEIGHT: u32 = 0x2;
 const DDSD_WIDTH: u32 = 0x4;
 const DDSD_PITCH: u32 = 0x8;
 const DDSD_PIXELFORMAT: u32 = 0x1000;
+const DDSD_MIPMAPCOUNT: u32 = 0x20000;
 
 const DDPF_ALPHAPIXELS: u32 = 0x1;
 const DDPF_RGB: u32 = 0x40;
 
+const DDSCAPS_COMPLEX: u32 = 0x8;
 const DDSCAPS_TEXTURE: u32 = 0x1000;
+const DDSCAPS_MIPMAP: u32 = 0x400000;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, bytemuck::Pod, bytemuck::Zeroable)]
@@ -52,15 +55,22 @@ struct DdsHeader {
 }
 
 impl DdsHeader {
-    fn new_rgba8(width: u32, height: u32) -> Self {
+    fn new_rgba8(width: u32, height: u32, mipmap_count: u32) -> Self {
+        let mut flags = DDSD_CAPS | DDSD_HEIGHT | DDSD_WIDTH | DDSD_PITCH | DDSD_PIXELFORMAT;
+        let mut caps = DDSCAPS_TEXTURE;
+        if mipmap_count > 1 {
+            flags |= DDSD_MIPMAPCOUNT;
+            caps |= DDSCAPS_COMPLEX | DDSCAPS_MIPMAP;
+        }
+
         Self {
             size: 124,
-            flags: DDSD_CAPS | DDSD_HEIGHT | DDSD_WIDTH | DDSD_PITCH | DDSD_PIXELFORMAT,
+            flags,
             height,
             width,
             pitch_or_linear_size: width * 4,
             depth: 1,
-            mipmap_count: 1,
+            mipmap_count,
             reserved1: [0; 11],
             pixel_format: DdsPixelFormat {
                 size: 32,
@@ -72,7 +82,7 @@ impl DdsHeader {
                 b_bit_mask: 0x00FF_0000,
                 a_bit_mask: 0xFF00_0000,
             },
-            caps: DDSCAPS_TEXTURE,
+            caps,
             caps2: 0,
             caps3: 0,
             caps4: 0,
@@ -85,14 +95,145 @@ fn write_dds_file<P: AsRef<Path>>(
     path: P,
     width: u32,
     height: u32,
-    rgba_data: &[u8],
+    mip_levels: &[Vec<u8>],
 ) -> std::io::Result<()> {
-    let header = DdsHeader::new_rgba8(width, height);
+    let header = DdsHeader::new_rgba8(width, height, mip_levels.len() as u32);
     let mut file = File::create(path)?;
     file.write_all(&DDS_MAGIC.to_le_bytes())?;
     file.write_all(bytemuck::bytes_of(&header))?;
-    file.write_all(rgba_data)?;
+    for level in mip_levels {
+        file.write_all(level)?;
+    }
     Ok(())
+}
+
+fn compute_mip_count(width: u32, height: u32) -> u32 {
+    width.max(height).ilog2().clamp(1, 8)
+}
+
+fn generate_mipmaps_diffuse(level0: Vec<u8>, width: u32, height: u32) -> Vec<Vec<u8>> {
+    let mip_count = compute_mip_count(width, height);
+    let mut mips = Vec::with_capacity(mip_count as usize);
+    let mut prev_w = width as usize;
+    let mut prev_h = height as usize;
+    mips.push(level0);
+
+    for _ in 1..mip_count {
+        let dst_w = (prev_w / 2).max(1);
+        let dst_h = (prev_h / 2).max(1);
+        let prev_level = mips.last().unwrap();
+
+        let mut next_level = vec![0u8; dst_w * dst_h * 4];
+        next_level
+            .par_chunks_exact_mut(dst_w * 4)
+            .enumerate()
+            .for_each(|(dy, row)| {
+                let sy0 = dy * 2;
+                let sy1 = (sy0 + 1).min(prev_h - 1);
+
+                for dx in 0..dst_w {
+                    let sx0 = dx * 2;
+                    let sx1 = (sx0 + 1).min(prev_w - 1);
+
+                    let p00_idx = (sy0 * prev_w + sx0) * 4;
+                    let p10_idx = (sy0 * prev_w + sx1) * 4;
+                    let p01_idx = (sy1 * prev_w + sx0) * 4;
+                    let p11_idx = (sy1 * prev_w + sx1) * 4;
+
+                    let off = dx * 4;
+                    for c in 0..4 {
+                        let sum = prev_level[p00_idx + c] as u32
+                            + prev_level[p10_idx + c] as u32
+                            + prev_level[p01_idx + c] as u32
+                            + prev_level[p11_idx + c] as u32;
+                        row[off + c] = ((sum + 2) / 4) as u8;
+                    }
+                }
+            });
+
+        mips.push(next_level);
+        prev_w = dst_w;
+        prev_h = dst_h;
+    }
+
+    mips
+}
+
+fn generate_mipmaps_normal_elevation(level0: Vec<u8>, width: u32, height: u32) -> Vec<Vec<u8>> {
+    let mip_count = compute_mip_count(width, height);
+    let mut mips = Vec::with_capacity(mip_count as usize);
+    let mut prev_w = width as usize;
+    let mut prev_h = height as usize;
+    mips.push(level0);
+
+    for _ in 1..mip_count {
+        let dst_w = (prev_w / 2).max(1);
+        let dst_h = (prev_h / 2).max(1);
+        let prev_level = mips.last().unwrap();
+
+        let mut next_level = vec![0u8; dst_w * dst_h * 4];
+        next_level
+            .par_chunks_exact_mut(dst_w * 4)
+            .enumerate()
+            .for_each(|(dy, row)| {
+                let sy0 = dy * 2;
+                let sy1 = (sy0 + 1).min(prev_h - 1);
+
+                for dx in 0..dst_w {
+                    let sx0 = dx * 2;
+                    let sx1 = (sx0 + 1).min(prev_w - 1);
+
+                    let p00_idx = (sy0 * prev_w + sx0) * 4;
+                    let p10_idx = (sy0 * prev_w + sx1) * 4;
+                    let p01_idx = (sy1 * prev_w + sx0) * 4;
+                    let p11_idx = (sy1 * prev_w + sx1) * 4;
+
+                    let unpack_normal = |idx: usize| -> Vec3 {
+                        Vec3::new(
+                            (prev_level[idx] as f32 / 255.0) * 2.0 - 1.0,
+                            (prev_level[idx + 1] as f32 / 255.0) * 2.0 - 1.0,
+                            (prev_level[idx + 2] as f32 / 255.0) * 2.0 - 1.0,
+                        )
+                    };
+
+                    let n00 = unpack_normal(p00_idx);
+                    let n10 = unpack_normal(p10_idx);
+                    let n01 = unpack_normal(p01_idx);
+                    let n11 = unpack_normal(p11_idx);
+
+                    let v_sum = n00 + n10 + n01 + n11;
+                    let normal = if v_sum.length_squared() > 1e-12 {
+                        v_sum.normalize()
+                    } else {
+                        let u = (dx as f32 + 0.5) / dst_w as f32;
+                        let v = (dy as f32 + 0.5) / dst_h as f32;
+                        uv_to_sphere_point(u, v)
+                    };
+
+                    let nx = (normal.x * 0.5 + 0.5).clamp(0.0, 1.0);
+                    let ny = (normal.y * 0.5 + 0.5).clamp(0.0, 1.0);
+                    let nz = (normal.z * 0.5 + 0.5).clamp(0.0, 1.0);
+
+                    let a_sum = prev_level[p00_idx + 3] as u32
+                        + prev_level[p10_idx + 3] as u32
+                        + prev_level[p01_idx + 3] as u32
+                        + prev_level[p11_idx + 3] as u32;
+                    let avg_a = ((a_sum + 2) / 4) as u8;
+
+                    let off = dx * 4;
+                    row[off] = (nx * 255.0).round() as u8;
+                    row[off + 1] = (ny * 255.0).round() as u8;
+                    row[off + 2] = (nz * 255.0).round() as u8;
+                    row[off + 3] = avg_a;
+                }
+            });
+
+        mips.push(next_level);
+        prev_w = dst_w;
+        prev_h = dst_h;
+    }
+
+    mips
 }
 
 fn uv_to_sphere_point(u: f32, v: f32) -> Vec3 {
@@ -322,20 +463,29 @@ fn convert_gebco_to_normal_elevation_rgba8(
         });
 
     println!(
-        "Normals computed in {:?}! Writing DDS to {:?}...",
-        start.elapsed(),
+        "Normals computed in {:?}! Generating mipmaps...",
+        start.elapsed()
+    );
+    let mip_start = Instant::now();
+    let mip_levels = generate_mipmaps_normal_elevation(rgba_bytes, width as u32, height as u32);
+    let total_bytes: usize = mip_levels.iter().map(|m| m.len()).sum();
+    println!(
+        "Generated {} mip levels in {:?}! Writing DDS to {:?}...",
+        mip_levels.len(),
+        mip_start.elapsed(),
         output_dds
     );
 
-    write_dds_file(output_dds, width as u32, height as u32, &rgba_bytes)?;
+    write_dds_file(output_dds, width as u32, height as u32, &mip_levels)?;
 
     println!(
-        "Done in {:?}! Saved {:?} ({}x{}, {} bytes)",
+        "Done in {:?}! Saved {:?} ({}x{}, {} bytes across {} mip levels)",
         start.elapsed(),
         output_dds,
         width,
         height,
-        rgba_bytes.len() + 128
+        total_bytes + 128,
+        mip_levels.len()
     );
 
     Ok(())
@@ -411,15 +561,27 @@ fn convert_image_to_rgba8(input_path: &Path, output_dds: &Path) -> anyhow::Resul
             (width, height, rgba.into_raw())
         };
 
-    write_dds_file(output_dds, target_w, target_h, &rgba_bytes)?;
+    println!("Generating diffuse mipmaps...");
+    let mip_start = Instant::now();
+    let mip_levels = generate_mipmaps_diffuse(rgba_bytes, target_w, target_h);
+    let total_bytes: usize = mip_levels.iter().map(|m| m.len()).sum();
+    println!(
+        "Generated {} mip levels in {:?}! Writing DDS to {:?}...",
+        mip_levels.len(),
+        mip_start.elapsed(),
+        output_dds
+    );
+
+    write_dds_file(output_dds, target_w, target_h, &mip_levels)?;
 
     println!(
-        "Done in {:?}! Saved {:?} ({}x{}, {} bytes)",
+        "Done in {:?}! Saved {:?} ({}x{}, {} bytes across {} mip levels)",
         start.elapsed(),
         output_dds,
         target_w,
         target_h,
-        rgba_bytes.len() + 128
+        total_bytes + 128,
+        mip_levels.len()
     );
 
     Ok(())
@@ -431,8 +593,8 @@ struct Size {
 }
 
 const OUTPUT_SIZE: Size = Size {
-    width: 4096,
-    height: 2048,
+    width: 8192,
+    height: 4096,
 };
 
 fn main() -> anyhow::Result<()> {
@@ -561,5 +723,62 @@ mod tests {
             n.dot(light_from_west) > n.dot(light_from_east),
             "West slope must face West!"
         );
+    }
+
+    #[test]
+    fn test_compute_mip_count() {
+        assert_eq!(compute_mip_count(1, 1), 1);
+        assert_eq!(compute_mip_count(2, 1), 2);
+        assert_eq!(compute_mip_count(4, 2), 3);
+        assert_eq!(compute_mip_count(4096, 2048), 13);
+        assert_eq!(compute_mip_count(8192, 4096), 14);
+    }
+
+    #[test]
+    fn test_generate_mipmaps_diffuse() {
+        // 2x2 image with 4 distinct RGBA values
+        let level0 = vec![
+            10, 20, 30, 40, // (0,0)
+            50, 60, 70, 80, // (1,0)
+            90, 100, 110, 120, // (0,1)
+            130, 140, 150, 160, // (1,1)
+        ];
+
+        let mips = generate_mipmaps_diffuse(level0.clone(), 2, 2);
+        assert_eq!(mips.len(), 2);
+        assert_eq!(mips[0], level0);
+
+        // Level 1 is 1x1: each channel is average of 4 pixels
+        // R: (10 + 50 + 90 + 130 + 2) / 4 = 282 / 4 = 70
+        // G: (20 + 60 + 100 + 140 + 2) / 4 = 322 / 4 = 80
+        // B: (30 + 70 + 110 + 150 + 2) / 4 = 362 / 4 = 90
+        // A: (40 + 80 + 120 + 160 + 2) / 4 = 402 / 4 = 100
+        assert_eq!(mips[1], vec![70, 80, 90, 100]);
+    }
+
+    #[test]
+    fn test_generate_mipmaps_normal_elevation() {
+        // 2x2 image: all water with unperturbed normal pointing in +Z direction
+        // Packed normal (0, 0, 1) -> (128, 128, 255), Alpha = 0 (water)
+        let normal_z = Vec3::Z;
+        let nx = ((normal_z.x * 0.5 + 0.5) * 255.0).round() as u8;
+        let ny = ((normal_z.y * 0.5 + 0.5) * 255.0).round() as u8;
+        let nz = ((normal_z.z * 0.5 + 0.5) * 255.0).round() as u8;
+
+        let level0 = vec![nx, ny, nz, 0, nx, ny, nz, 0, nx, ny, nz, 0, nx, ny, nz, 0];
+
+        let mips = generate_mipmaps_normal_elevation(level0.clone(), 2, 2);
+        assert_eq!(mips.len(), 2);
+        assert_eq!(mips[1].len(), 4);
+        assert_eq!(mips[1][3], 0); // Still water
+
+        let unpacked_n = Vec3::new(
+            (mips[1][0] as f32 / 255.0) * 2.0 - 1.0,
+            (mips[1][1] as f32 / 255.0) * 2.0 - 1.0,
+            (mips[1][2] as f32 / 255.0) * 2.0 - 1.0,
+        )
+        .normalize();
+
+        assert!(unpacked_n.dot(Vec3::Z) > 0.999);
     }
 }

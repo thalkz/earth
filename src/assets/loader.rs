@@ -35,7 +35,7 @@ pub fn load_image(filename: &str) -> anyhow::Result<ImageAsset> {
     Ok(ImageAsset {
         width,
         height,
-        data: rgba.into_raw(),
+        mip_levels: vec![rgba.into_raw()],
     })
 }
 

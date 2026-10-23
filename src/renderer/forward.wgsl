@@ -64,8 +64,9 @@ var sampler_diffuse: sampler;
 @fragment
 fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
     let diffuse_sample = textureSample(texture_diffuse, sampler_diffuse, vertex.tex_coords);
+    let elevation_sample = textureSampleLevel(texture_elevation, sampler_elevation, vertex.tex_coords, 0.0);
 
-    let is_water = vertex.elevation <= 0.001;
+    let is_water = elevation_sample.a <= 0.001;
     var object_color = diffuse_sample;
     if (is_water) {
         object_color = vec4<f32>(0.0, 0.1, 0.6, 1.0);
@@ -74,7 +75,7 @@ fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
     let ambient_strength = 0.2;
     let ambient_color = light.color * ambient_strength;
 
-    let normal = normalize(vertex.world_normal);
+    let normal = normalize(elevation_sample.rgb * 2.0 - vec3<f32>(1.0));
     let light_dir = normalize(light.direction);
     let diffuse_strength = max(dot(normal, light_dir), 0.0);
     let diffuse_color = light.color * diffuse_strength;

@@ -28,7 +28,7 @@ pub struct Material {
 pub struct ImageAsset {
     pub width: u32,
     pub height: u32,
-    pub data: Vec<u8>,
+    pub mip_levels: Vec<Vec<u8>>,
 }
 
 impl ImageAsset {
@@ -36,7 +36,7 @@ impl ImageAsset {
         Self {
             width: 1,
             height: 1,
-            data: rgba.map(|c| (c.clamp(0.0, 1.0) * 255.0) as u8).to_vec(),
+            mip_levels: vec![rgba.map(|c| (c.clamp(0.0, 1.0) * 255.0) as u8).to_vec()],
         }
     }
 }
