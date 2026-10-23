@@ -1,4 +1,3 @@
-use crate::world::{Action, CameraActionState};
 use glam::Vec2;
 use std::collections::HashSet;
 use winit::event::{ElementState, MouseButton, MouseScrollDelta};
@@ -100,39 +99,7 @@ impl InputState {
         self.modifiers.control_key() || self.modifiers.super_key()
     }
 
-    #[allow(dead_code)]
-    pub fn is_alt_down(&self) -> bool {
-        self.modifiers.alt_key()
-    }
-
     pub fn is_exit_pressed(&self) -> bool {
         self.is_key_pressed(KeyCode::Escape)
     }
 }
-
-#[allow(dead_code)]
-impl From<&InputState> for CameraActionState {
-    fn from(value: &InputState) -> Self {
-        // TODO avoid allocating a new hashmap every frame
-        let actions = value
-            .pressed_keys
-            .iter()
-            .copied()
-            .filter_map(to_action)
-            .collect();
-        CameraActionState { actions }
-    }
-}
-
-#[allow(dead_code)]
-fn to_action(key: KeyCode) -> Option<Action> {
-    match key {
-        KeyCode::KeyW | KeyCode::ArrowUp => Some(Action::MoveForward),
-        KeyCode::KeyS | KeyCode::ArrowDown => Some(Action::MoveBackward),
-        KeyCode::KeyA | KeyCode::ArrowLeft => Some(Action::MoveLeft),
-        KeyCode::KeyD | KeyCode::ArrowRight => Some(Action::MoveRight),
-        KeyCode::Space => Some(Action::ShowGizmos),
-        _ => None,
-    }
-}
-

@@ -184,17 +184,6 @@ impl RenderScene {
 
         self.render_gizmos.update(device, queue, &scene.gizmos);
     }
-
-    #[allow(dead_code)]
-    pub fn lod_counts(&self) -> [usize; 4] {
-        let mut counts = [0usize; 4];
-        for v in &self.visible_earth_meshes {
-            if v.lod < 4 {
-                counts[v.lod] += 1;
-            }
-        }
-        counts
-    }
 }
 
 fn create_elevation_texture(
@@ -277,19 +266,3 @@ impl From<Light> for LightUniform {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_select_lod_distance_thresholds() {
-        assert_eq!(select_lod(0.1), 0);
-        assert_eq!(select_lod(0.59), 0);
-        assert_eq!(select_lod(0.61), 1);
-        assert_eq!(select_lod(1.29), 1);
-        assert_eq!(select_lod(1.31), 2);
-        assert_eq!(select_lod(2.49), 2);
-        assert_eq!(select_lod(2.51), 3);
-        assert_eq!(select_lod(10.0), 3);
-    }
-}

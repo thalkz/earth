@@ -7,8 +7,6 @@ use wgpu::{
 use winit::window::Window;
 
 pub struct GpuContext {
-    #[allow(dead_code)]
-    pub instance: Instance,
     pub adapter: Adapter,
     pub device: Device,
     pub queue: Queue,
@@ -40,7 +38,6 @@ impl GpuContext {
             .await?;
 
         Ok(Self {
-            instance,
             adapter,
             device,
             queue,

@@ -40,7 +40,7 @@ impl SurfaceHandler {
             format: surface_format,
             width: width.max(1),
             height: height.max(1),
-            present_mode: present_mode,
+            present_mode,
             alpha_mode: surface_caps.alpha_modes[0],
             view_formats: vec![],
             desired_maximum_frame_latency: 2,

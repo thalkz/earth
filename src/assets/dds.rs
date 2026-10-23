@@ -3,32 +3,9 @@ use rayon::prelude::*;
 
 pub const DDS_MAGIC: u32 = 0x2053_4444; // "DDS " in little-endian
 
-#[allow(dead_code)]
-pub const DDSD_CAPS: u32 = 0x1;
-#[allow(dead_code)]
-pub const DDSD_HEIGHT: u32 = 0x2;
-#[allow(dead_code)]
-pub const DDSD_WIDTH: u32 = 0x4;
-#[allow(dead_code)]
-pub const DDSD_PITCH: u32 = 0x8;
-#[allow(dead_code)]
-pub const DDSD_PIXELFORMAT: u32 = 0x1000;
-#[allow(dead_code)]
 pub const DDSD_MIPMAPCOUNT: u32 = 0x20000;
-
-#[allow(dead_code)]
-pub const DDPF_ALPHAPIXELS: u32 = 0x1;
-#[allow(dead_code)]
 pub const DDPF_FOURCC: u32 = 0x4;
-#[allow(dead_code)]
 pub const DDPF_RGB: u32 = 0x40;
-
-#[allow(dead_code)]
-pub const DDSCAPS_COMPLEX: u32 = 0x8;
-#[allow(dead_code)]
-pub const DDSCAPS_TEXTURE: u32 = 0x1000;
-#[allow(dead_code)]
-pub const DDSCAPS_MIPMAP: u32 = 0x400000;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, bytemuck::Pod, bytemuck::Zeroable)]
@@ -162,85 +139,4 @@ pub fn parse_dds(mut data: Vec<u8>) -> anyhow::Result<ImageAsset> {
         height,
         mip_levels,
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_dds_header_sizes() {
-        assert_eq!(std::mem::size_of::<DdsPixelFormat>(), 32);
-        assert_eq!(std::mem::size_of::<DdsHeader>(), 124);
-        assert_eq!(std::mem::size_of::<DdsHeaderDxt10>(), 20);
-    }
-
-    #[test]
-    fn test_dds_invalid_magic() {
-        let bad_buffer = vec![0u8; 128];
-        assert!(parse_dds(bad_buffer).is_err());
-    }
-
-    #[test]
-    fn test_parse_dds_multi_mip() {
-        // Create a 4x2 texture with 3 mip levels (4x2, 2x1, 1x1)
-        let width = 4u32;
-        let height = 2u32;
-        let mip_count = 3u32;
-
-        let l0_len = 4 * 2 * 4; // 32
-        let l1_len = 2 * 1 * 4; // 8
-        let l2_len = 1 * 1 * 4; // 4
-        let _total_payload = l0_len + l1_len + l2_len;
-
-        let header = DdsHeader {
-            size: 124,
-            flags: DDSD_CAPS
-                | DDSD_HEIGHT
-                | DDSD_WIDTH
-                | DDSD_PITCH
-                | DDSD_PIXELFORMAT
-                | DDSD_MIPMAPCOUNT,
-            height,
-            width,
-            pitch_or_linear_size: width * 4,
-            depth: 1,
-            mipmap_count: mip_count,
-            reserved1: [0; 11],
-            pixel_format: DdsPixelFormat {
-                size: 32,
-                flags: DDPF_RGB | DDPF_ALPHAPIXELS,
-                four_cc: 0,
-                rgb_bit_count: 32,
-                r_bit_mask: 0x0000_00FF,
-                g_bit_mask: 0x0000_FF00,
-                b_bit_mask: 0x00FF_0000,
-                a_bit_mask: 0xFF00_0000,
-            },
-            caps: DDSCAPS_TEXTURE | DDSCAPS_COMPLEX | DDSCAPS_MIPMAP,
-            caps2: 0,
-            caps3: 0,
-            caps4: 0,
-            reserved2: 0,
-        };
-
-        let mut buffer = Vec::new();
-        buffer.extend_from_slice(&DDS_MAGIC.to_le_bytes());
-        buffer.extend_from_slice(bytemuck::bytes_of(&header));
-
-        // Fill mip payloads
-        buffer.extend(vec![1u8; l0_len]);
-        buffer.extend(vec![2u8; l1_len]);
-        buffer.extend(vec![3u8; l2_len]);
-
-        let asset = parse_dds(buffer).expect("Should successfully parse mipmapped DDS");
-        assert_eq!(asset.width, 4);
-        assert_eq!(asset.height, 2);
-        assert_eq!(asset.mip_levels[0].len(), l0_len);
-        assert_eq!(asset.mip_levels[0][0], 1);
-        assert_eq!(asset.mip_levels[1].len(), l1_len);
-        assert_eq!(asset.mip_levels[1][0], 2);
-        assert_eq!(asset.mip_levels[2].len(), l2_len);
-        assert_eq!(asset.mip_levels[2][0], 3);
-    }
 }

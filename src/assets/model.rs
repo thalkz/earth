@@ -16,22 +16,6 @@ pub struct Mesh {
 }
 
 impl Mesh {
-    pub fn new(
-        name: String,
-        vertices: Vec<Vertex>,
-        indices: Vec<u32>,
-        material_index: usize,
-    ) -> Self {
-        let count = indices.len() as u32;
-        Self {
-            name,
-            vertices,
-            indices,
-            lod_ranges: vec![0..count],
-            material_index,
-        }
-    }
-
     pub fn with_lods(
         name: String,
         vertices: Vec<Vertex>,
@@ -50,15 +34,9 @@ impl Mesh {
 }
 
 #[derive(Clone, Debug)]
-pub enum MaterialDiffuse {
-    Color([f32; 4]),
-    Texture(ImageAsset),
-}
-
-#[derive(Clone, Debug)]
 pub struct Material {
     pub name: String,
-    pub diffuse: MaterialDiffuse,
+    pub diffuse: ImageAsset,
 }
 
 #[derive(Clone, Debug)]
@@ -66,16 +44,6 @@ pub struct ImageAsset {
     pub width: u32,
     pub height: u32,
     pub mip_levels: Vec<Vec<u8>>,
-}
-
-impl ImageAsset {
-    pub fn from_color(rgba: [f32; 4]) -> Self {
-        Self {
-            width: 1,
-            height: 1,
-            mip_levels: vec![rgba.map(|c| (c.clamp(0.0, 1.0) * 255.0) as u8).to_vec()],
-        }
-    }
 }
 
 #[repr(C)]

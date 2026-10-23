@@ -1,4 +1,4 @@
-use crate::assets::{ImageAsset, MaterialDiffuse, Model, Vertex};
+use crate::assets::{Model, Vertex};
 use crate::geo::BoundingSphere;
 use crate::gpu::Texture;
 use std::mem;
@@ -28,14 +28,6 @@ impl RenderMesh {
         let max_idx = self.lod_ranges.len().saturating_sub(1);
         self.lod_ranges[lod.min(max_idx)].clone()
     }
-
-    #[allow(dead_code)]
-    pub fn num_elements(&self) -> u32 {
-        self.lod_ranges
-            .first()
-            .map(|r| r.end - r.start)
-            .unwrap_or(0)
-    }
 }
 
 pub struct RenderMaterial {
@@ -43,6 +35,7 @@ pub struct RenderMaterial {
 }
 
 impl RenderModel {
+    #[allow(clippy::single_range_in_vec_init)]
     pub fn from_model(
         device: &Device,
         queue: &Queue,
@@ -53,11 +46,8 @@ impl RenderModel {
         let materials = model
             .materials
             .iter()
-            .map(|mat| {
-                let image = match &mat.diffuse {
-                    MaterialDiffuse::Texture(img) => img,
-                    MaterialDiffuse::Color(rgba) => &ImageAsset::from_color(*rgba),
-                };
+            .map(|material| {
+                let image = &material.diffuse;
 
                 let texture = Texture::create_2d(
                     device,
@@ -66,7 +56,7 @@ impl RenderModel {
                     image.height,
                     TextureFormat::Rgba8UnormSrgb,
                     &image.mip_levels,
-                    Some(&mat.name),
+                    Some(&material.name),
                 );
 
                 let texture_bind_group = device.create_bind_group(&BindGroupDescriptor {
@@ -81,7 +71,7 @@ impl RenderModel {
                             resource: BindingResource::Sampler(sampler),
                         },
                     ],
-                    label: Some(&format!("Material Bind Group {}", mat.name)),
+                    label: Some(&format!("Material Bind Group {}", material.name)),
                 });
 
                 RenderMaterial {

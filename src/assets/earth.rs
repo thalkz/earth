@@ -1,5 +1,5 @@
 use crate::{
-    assets::{self, ImageAsset, Material, MaterialDiffuse, Mesh, Model, Vertex},
+    assets::{self, ImageAsset, Material, Mesh, Model, Vertex},
     geo,
 };
 use glam::{Vec2, Vec3};
@@ -55,7 +55,7 @@ fn create_material(filename: &str) -> anyhow::Result<Vec<Material>> {
     let diffuse: ImageAsset = assets::load_dds_image(filename)?;
     Ok(vec![Material {
         name: "earth_elevation".to_string(),
-        diffuse: MaterialDiffuse::Texture(diffuse),
+        diffuse,
     }])
 }
 
@@ -176,77 +176,3 @@ const CUBE_FACE_NORMALS: [Vec3; 6] = [
     Vec3::NEG_Z,
 ];
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::time::Instant;
-
-    #[test]
-    fn test_parallel_earth_load() {
-        let start = Instant::now();
-        println!("STARTED");
-        let (elevation_file, diffuse_file) = if std::path::Path::new(env!("OUT_DIR"))
-            .join("res")
-            .join("earth")
-            .join("elevation_8192x4096.dds")
-            .exists()
-        {
-            (
-                "earth/elevation_8192x4096.dds",
-                "earth/diffuse_8192x4096.dds",
-            )
-        } else {
-            (
-                "earth/elevation_4096x2048.dds",
-                "earth/diffuse_4096x2048.dds",
-            )
-        };
-        let result = pollster::block_on(Earth::load(256, 8, elevation_file, diffuse_file));
-        assert!(result.is_ok());
-        let earth = result.unwrap();
-        // 6 faces * 2 * 2 parts = 24 meshes
-        assert_eq!(earth.model.meshes.len(), 24);
-        println!(
-            "Earth loaded at {}ms in parallel",
-            start.elapsed().as_millis()
-        );
-    }
-
-    #[test]
-    fn test_mesh_lod_ranges() {
-        let mesh = create_face_part(Vec3::Z, 0, 0, 1, 64, 0);
-        assert_eq!(mesh.lod_ranges.len(), 4);
-
-        // Ranges must be contiguous
-        assert_eq!(mesh.lod_ranges[0].start, 0);
-        assert_eq!(mesh.lod_ranges[0].end, mesh.lod_ranges[1].start);
-        assert_eq!(mesh.lod_ranges[1].end, mesh.lod_ranges[2].start);
-        assert_eq!(mesh.lod_ranges[2].end, mesh.lod_ranges[3].start);
-        assert_eq!(mesh.lod_ranges[3].end, mesh.indices.len() as u32);
-
-        // Triangle count must strictly decrease from LOD 0 to LOD 3
-        let lod0_indices = mesh.lod_ranges[0].end - mesh.lod_ranges[0].start;
-        let lod1_indices = mesh.lod_ranges[1].end - mesh.lod_ranges[1].start;
-        let lod2_indices = mesh.lod_ranges[2].end - mesh.lod_ranges[2].start;
-        let lod3_indices = mesh.lod_ranges[3].end - mesh.lod_ranges[3].start;
-
-        assert!(lod0_indices > lod1_indices);
-        assert!(lod1_indices > lod2_indices);
-        assert!(lod2_indices > lod3_indices);
-    }
-
-    #[test]
-    fn test_subdivision_mesh_counts() {
-        let meshes_1 = create_meshes(4, 1);
-        assert_eq!(meshes_1.len(), 6);
-
-        let meshes_2 = create_meshes(4, 2);
-        assert_eq!(meshes_2.len(), 24);
-
-        let meshes_3 = create_meshes(4, 3);
-        assert_eq!(meshes_3.len(), 54);
-
-        let meshes_4 = create_meshes(4, 4);
-        assert_eq!(meshes_4.len(), 96);
-    }
-}

@@ -39,16 +39,7 @@ impl Default for GlobeCamera {
     }
 }
 
-#[allow(dead_code)]
 impl GlobeCamera {
-    pub fn new(target: LatLng, distance: f32) -> Self {
-        Self {
-            target,
-            distance: distance.clamp(MIN_DISTANCE, MAX_DISTANCE),
-            ..Default::default()
-        }
-    }
-
     /// Computes the local East-North-Up orthonormal basis at the current target.
     /// Returns (east, north, up_normal).
     pub fn local_enu_frame(&self) -> (Vec3, Vec3, Vec3) {
@@ -92,12 +83,6 @@ impl GlobeCamera {
         camera.target = target;
         camera.up = up;
         camera.update_clip_planes();
-    }
-
-    /// Resets orientation to look North.
-    pub fn reset_north(&mut self) {
-        self.heading = 0.0;
-        self.vel_heading = 0.0;
     }
 
     /// Resets camera to default space view.
