@@ -32,7 +32,7 @@ impl Scene {
         let gizmos = Gizmos::new();
 
         const TEXTURE_SIZE: (u32, u32) = (8192, 4096);
-        const EARTH_FACE_SUBDIVISION: usize = 2;
+        const EARTH_FACE_SUBDIVISION: usize = 4;
         const SUBDIVISION_RESOLUTION: usize = 256;
         let earth = Earth::load(
             SUBDIVISION_RESOLUTION,
@@ -70,8 +70,7 @@ impl Scene {
         self.gizmos.clear();
         if self.config.enable_gizmos && input.is_key_pressed(KeyCode::Space) {
             let white = [1.0; 4];
-            self.gizmos
-                .add_model(&self.earth.model, white, &self.camera);
+            self.gizmos.add_model(&self.earth.model, white);
         }
     }
 }

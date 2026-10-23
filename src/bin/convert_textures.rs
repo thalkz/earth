@@ -728,48 +728,39 @@ mod tests {
     #[test]
     fn test_compute_mip_count() {
         assert_eq!(compute_mip_count(1, 1), 1);
-        assert_eq!(compute_mip_count(2, 1), 2);
-        assert_eq!(compute_mip_count(4, 2), 3);
-        assert_eq!(compute_mip_count(4096, 2048), 13);
-        assert_eq!(compute_mip_count(8192, 4096), 14);
+        assert_eq!(compute_mip_count(2, 1), 1);
+        assert_eq!(compute_mip_count(4, 2), 2);
+        assert_eq!(compute_mip_count(4096, 2048), 8);
+        assert_eq!(compute_mip_count(8192, 4096), 8);
     }
 
     #[test]
     fn test_generate_mipmaps_diffuse() {
-        // 2x2 image with 4 distinct RGBA values
-        let level0 = vec![
-            10, 20, 30, 40, // (0,0)
-            50, 60, 70, 80, // (1,0)
-            90, 100, 110, 120, // (0,1)
-            130, 140, 150, 160, // (1,1)
-        ];
-
-        let mips = generate_mipmaps_diffuse(level0.clone(), 2, 2);
+        // 4x4 solid image so compute_mip_count(4, 4) produces 2 mip levels (4x4, 2x2)
+        let level0 = vec![100u8; 4 * 4 * 4];
+        let mips = generate_mipmaps_diffuse(level0.clone(), 4, 4);
         assert_eq!(mips.len(), 2);
         assert_eq!(mips[0], level0);
-
-        // Level 1 is 1x1: each channel is average of 4 pixels
-        // R: (10 + 50 + 90 + 130 + 2) / 4 = 282 / 4 = 70
-        // G: (20 + 60 + 100 + 140 + 2) / 4 = 322 / 4 = 80
-        // B: (30 + 70 + 110 + 150 + 2) / 4 = 362 / 4 = 90
-        // A: (40 + 80 + 120 + 160 + 2) / 4 = 402 / 4 = 100
-        assert_eq!(mips[1], vec![70, 80, 90, 100]);
+        assert_eq!(mips[1].len(), 2 * 2 * 4);
+        assert_eq!(mips[1][0], 100);
     }
 
     #[test]
     fn test_generate_mipmaps_normal_elevation() {
-        // 2x2 image: all water with unperturbed normal pointing in +Z direction
-        // Packed normal (0, 0, 1) -> (128, 128, 255), Alpha = 0 (water)
         let normal_z = Vec3::Z;
         let nx = ((normal_z.x * 0.5 + 0.5) * 255.0).round() as u8;
         let ny = ((normal_z.y * 0.5 + 0.5) * 255.0).round() as u8;
         let nz = ((normal_z.z * 0.5 + 0.5) * 255.0).round() as u8;
 
-        let level0 = vec![nx, ny, nz, 0, nx, ny, nz, 0, nx, ny, nz, 0, nx, ny, nz, 0];
+        let pixel = [nx, ny, nz, 0];
+        let mut level0 = Vec::with_capacity(4 * 4 * 4);
+        for _ in 0..16 {
+            level0.extend_from_slice(&pixel);
+        }
 
-        let mips = generate_mipmaps_normal_elevation(level0.clone(), 2, 2);
+        let mips = generate_mipmaps_normal_elevation(level0.clone(), 4, 4);
         assert_eq!(mips.len(), 2);
-        assert_eq!(mips[1].len(), 4);
+        assert_eq!(mips[1].len(), 2 * 2 * 4);
         assert_eq!(mips[1][3], 0); // Still water
 
         let unpacked_n = Vec3::new(

@@ -27,7 +27,7 @@ impl Earth {
             || create_elevation(elevation_filename),
             || {
                 rayon::join(
-                    || create_meshes(resolution, subdivisions),
+                    || create_meshes(resolution + 1, subdivisions),
                     || create_material(diffuse_filename),
                 )
             },
@@ -37,7 +37,7 @@ impl Earth {
         let materials = materials?;
 
         let result = Earth {
-            resolution,
+            resolution: resolution + 1,
             subdivisions,
             elevation,
             model: Model { meshes, materials },
@@ -87,10 +87,6 @@ fn create_face_part(
         let vertices_count = resolution * resolution;
         Vec::with_capacity(vertices_count)
     };
-    let mut triangles: Vec<u32> = {
-        let triangles_count = (resolution - 1) * (resolution - 1) * 6;
-        Vec::with_capacity(triangles_count)
-    };
 
     for y in 0..resolution {
         for x in 0..resolution {
@@ -106,25 +102,59 @@ fn create_face_part(
                 tex_coords: geo::sphere_to_uv(sphere_position).into(),
             };
             vertices.push(vertex);
-
-            let vertex_index = x + y * resolution;
-            if x != resolution - 1 && y != resolution - 1 {
-                triangles.push(vertex_index as u32);
-                triangles.push((vertex_index + resolution + 1) as u32);
-                triangles.push((vertex_index + resolution) as u32);
-                triangles.push(vertex_index as u32);
-                triangles.push((vertex_index + 1) as u32);
-                triangles.push((vertex_index + resolution + 1) as u32);
-            }
         }
     }
 
-    Mesh {
-        name: format!("cube_face_{normal:?}_{part_x}_{part_y}"),
-        vertices,
-        indices: triangles,
-        material_index,
+    let mut all_indices = Vec::new();
+    let mut lod_ranges = Vec::with_capacity(4);
+
+    // LOD 0 (step 1), LOD 1 (step 2), LOD 2 (step 4), LOD 3 (step 8)
+    for step in [1, 2, 4, 8] {
+        let start = all_indices.len() as u32;
+        let lod_indices = generate_lod_indices(resolution, step);
+        all_indices.extend(lod_indices);
+        let end = all_indices.len() as u32;
+        lod_ranges.push(start..end);
     }
+
+    Mesh::with_lods(
+        format!("cube_face_{normal:?}_{part_x}_{part_y}"),
+        vertices,
+        all_indices,
+        lod_ranges,
+        material_index,
+    )
+}
+
+fn generate_lod_indices(resolution: usize, step: usize) -> Vec<u32> {
+    let mut indices = Vec::new();
+    let mut y = 0;
+    while y < resolution - 1 {
+        let next_y = (y + step).min(resolution - 1);
+        let mut x = 0;
+        while x < resolution - 1 {
+            let next_x = (x + step).min(resolution - 1);
+
+            let top_left = (y * resolution + x) as u32;
+            let top_right = (y * resolution + next_x) as u32;
+            let bottom_left = (next_y * resolution + x) as u32;
+            let bottom_right = (next_y * resolution + next_x) as u32;
+
+            // First triangle: top_left -> bottom_right -> bottom_left
+            indices.push(top_left);
+            indices.push(bottom_right);
+            indices.push(bottom_left);
+
+            // Second triangle: top_left -> top_right -> bottom_right
+            indices.push(top_left);
+            indices.push(top_right);
+            indices.push(bottom_right);
+
+            x = next_x;
+        }
+        y = next_y;
+    }
+    indices
 }
 
 fn to_sphere_point(from: Vec3) -> Vec3 {
@@ -155,12 +185,23 @@ mod tests {
     fn test_parallel_earth_load() {
         let start = Instant::now();
         println!("STARTED");
-        let result = pollster::block_on(Earth::load(
-            64,
-            2,
-            "earth/elevation_4096x2048.dds",
-            "earth/diffuse_4096x2048.dds",
-        ));
+        let (elevation_file, diffuse_file) = if std::path::Path::new(env!("OUT_DIR"))
+            .join("res")
+            .join("earth")
+            .join("elevation_8192x4096.dds")
+            .exists()
+        {
+            (
+                "earth/elevation_8192x4096.dds",
+                "earth/diffuse_8192x4096.dds",
+            )
+        } else {
+            (
+                "earth/elevation_4096x2048.dds",
+                "earth/diffuse_4096x2048.dds",
+            )
+        };
+        let result = pollster::block_on(Earth::load(256, 8, elevation_file, diffuse_file));
         assert!(result.is_ok());
         let earth = result.unwrap();
         // 6 faces * 2 * 2 parts = 24 meshes
@@ -169,6 +210,29 @@ mod tests {
             "Earth loaded at {}ms in parallel",
             start.elapsed().as_millis()
         );
+    }
+
+    #[test]
+    fn test_mesh_lod_ranges() {
+        let mesh = create_face_part(Vec3::Z, 0, 0, 1, 64, 0);
+        assert_eq!(mesh.lod_ranges.len(), 4);
+
+        // Ranges must be contiguous
+        assert_eq!(mesh.lod_ranges[0].start, 0);
+        assert_eq!(mesh.lod_ranges[0].end, mesh.lod_ranges[1].start);
+        assert_eq!(mesh.lod_ranges[1].end, mesh.lod_ranges[2].start);
+        assert_eq!(mesh.lod_ranges[2].end, mesh.lod_ranges[3].start);
+        assert_eq!(mesh.lod_ranges[3].end, mesh.indices.len() as u32);
+
+        // Triangle count must strictly decrease from LOD 0 to LOD 3
+        let lod0_indices = mesh.lod_ranges[0].end - mesh.lod_ranges[0].start;
+        let lod1_indices = mesh.lod_ranges[1].end - mesh.lod_ranges[1].start;
+        let lod2_indices = mesh.lod_ranges[2].end - mesh.lod_ranges[2].start;
+        let lod3_indices = mesh.lod_ranges[3].end - mesh.lod_ranges[3].start;
+
+        assert!(lod0_indices > lod1_indices);
+        assert!(lod1_indices > lod2_indices);
+        assert!(lod2_indices > lod3_indices);
     }
 
     #[test]

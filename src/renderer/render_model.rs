@@ -2,6 +2,7 @@ use crate::assets::{ImageAsset, MaterialDiffuse, Model, Vertex};
 use crate::geo::BoundingSphere;
 use crate::gpu::Texture;
 use std::mem;
+use std::ops::Range;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindingResource, Buffer,
@@ -17,9 +18,24 @@ pub struct RenderModel {
 pub struct RenderMesh {
     pub vertex_buffer: Buffer,
     pub index_buffer: Buffer,
-    pub num_elements: u32,
+    pub lod_ranges: Vec<Range<u32>>,
     pub material_index: usize,
     pub bounding_sphere: BoundingSphere,
+}
+
+impl RenderMesh {
+    pub fn lod_range(&self, lod: usize) -> Range<u32> {
+        let max_idx = self.lod_ranges.len().saturating_sub(1);
+        self.lod_ranges[lod.min(max_idx)].clone()
+    }
+
+    #[allow(dead_code)]
+    pub fn num_elements(&self) -> u32 {
+        self.lod_ranges
+            .first()
+            .map(|r| r.end - r.start)
+            .unwrap_or(0)
+    }
 }
 
 pub struct RenderMaterial {
@@ -95,10 +111,16 @@ impl RenderModel {
                 // Add safety margin for vertex shader displacements (e.g. elevation height scale)
                 bounding_sphere.radius *= 1.05;
 
+                let lod_ranges = if mesh.lod_ranges.is_empty() {
+                    vec![0..mesh.indices.len() as u32]
+                } else {
+                    mesh.lod_ranges.clone()
+                };
+
                 RenderMesh {
                     vertex_buffer,
                     index_buffer,
-                    num_elements: mesh.indices.len() as u32,
+                    lod_ranges,
                     material_index: mesh.material_index,
                     bounding_sphere,
                 }

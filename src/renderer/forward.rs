@@ -1,6 +1,6 @@
 use crate::assets::Vertex;
 use crate::gpu::Texture;
-use crate::renderer::RenderModel;
+use crate::renderer::{RenderModel, VisibleMesh};
 use wgpu::{
     BindGroup, BindGroupLayout, BlendState, ColorTargetState, ColorWrites, CompareFunction,
     DepthBiasState, DepthStencilState, Device, Face, FragmentState, FrontFace, IndexFormat,
@@ -89,7 +89,7 @@ impl ForwardPass {
         &'a self,
         render_pass: &mut RenderPass<'a>,
         render_earth: &RenderModel,
-        visible_mesh_indices: &[usize],
+        visible_meshes: &[VisibleMesh],
         camera_bind_group: &'a BindGroup,
         light_bind_group: &'a BindGroup,
         elevation_bind_group: &'a BindGroup,
@@ -99,13 +99,14 @@ impl ForwardPass {
         render_pass.set_bind_group(1, light_bind_group, &[]);
         render_pass.set_bind_group(2, elevation_bind_group, &[]);
 
-        for &mesh_idx in visible_mesh_indices {
-            let mesh = &render_earth.meshes[mesh_idx];
+        for visible in visible_meshes {
+            let mesh = &render_earth.meshes[visible.mesh_index];
             let material = &render_earth.materials[mesh.material_index];
+            let range = mesh.lod_range(visible.lod);
             render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
             render_pass.set_index_buffer(mesh.index_buffer.slice(..), IndexFormat::Uint32);
             render_pass.set_bind_group(3, &material.bind_group, &[]);
-            render_pass.draw_indexed(0..mesh.num_elements, 0, 0..1);
+            render_pass.draw_indexed(range, 0, 0..1);
         }
     }
 }

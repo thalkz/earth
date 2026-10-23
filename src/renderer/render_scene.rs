@@ -11,6 +11,26 @@ use wgpu::{
     BufferUsages, Device, Queue, Sampler, TextureFormat,
 };
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct VisibleMesh {
+    pub mesh_index: usize,
+    pub lod: usize,
+}
+
+pub const LOD_DISTANCE_THRESHOLDS: [f32; 3] = [0.2, 0.4, 1.0];
+
+pub fn select_lod(distance: f32) -> usize {
+    if distance < LOD_DISTANCE_THRESHOLDS[0] {
+        0
+    } else if distance < LOD_DISTANCE_THRESHOLDS[1] {
+        1
+    } else if distance < LOD_DISTANCE_THRESHOLDS[2] {
+        2
+    } else {
+        3
+    }
+}
+
 pub struct RenderScene {
     pub render_earth: RenderModel,
     pub render_gizmos: RenderGizmos,
@@ -20,7 +40,7 @@ pub struct RenderScene {
     pub light_bind_group: BindGroup,
     pub elevation_bind_group: BindGroup,
     pub frustum: Frustum,
-    pub visible_earth_meshes: Vec<usize>,
+    pub visible_earth_meshes: Vec<VisibleMesh>,
 }
 
 impl RenderScene {
@@ -101,7 +121,10 @@ impl RenderScene {
             if !frustum.contains_sphere(&mesh.bounding_sphere) {
                 continue;
             }
-            visible_earth_meshes.push(i);
+            let dist_to_center = scene.camera.eye.distance(mesh.bounding_sphere.center);
+            let closest_dist = (dist_to_center - mesh.bounding_sphere.radius).max(0.0);
+            let lod = select_lod(closest_dist);
+            visible_earth_meshes.push(VisibleMesh { mesh_index: i, lod });
         }
 
         Self {
@@ -137,7 +160,11 @@ impl RenderScene {
             if !self.frustum.contains_sphere(&mesh.bounding_sphere) {
                 continue;
             }
-            self.visible_earth_meshes.push(i);
+            let dist_to_center = scene.camera.eye.distance(mesh.bounding_sphere.center);
+            let closest_dist = (dist_to_center - mesh.bounding_sphere.radius).max(0.0);
+            let lod = select_lod(closest_dist);
+            self.visible_earth_meshes
+                .push(VisibleMesh { mesh_index: i, lod });
         }
 
         let mut camera_uniform = CameraUniform::new();
@@ -156,6 +183,17 @@ impl RenderScene {
         );
 
         self.render_gizmos.update(device, queue, &scene.gizmos);
+    }
+
+    #[allow(dead_code)]
+    pub fn lod_counts(&self) -> [usize; 4] {
+        let mut counts = [0usize; 4];
+        for v in &self.visible_earth_meshes {
+            if v.lod < 4 {
+                counts[v.lod] += 1;
+            }
+        }
+        counts
     }
 }
 
@@ -236,5 +274,22 @@ impl LightUniform {
 impl From<Light> for LightUniform {
     fn from(value: Light) -> Self {
         Self::new(value.direction.to_array(), value.color.to_array())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_select_lod_distance_thresholds() {
+        assert_eq!(select_lod(0.1), 0);
+        assert_eq!(select_lod(0.59), 0);
+        assert_eq!(select_lod(0.61), 1);
+        assert_eq!(select_lod(1.29), 1);
+        assert_eq!(select_lod(1.31), 2);
+        assert_eq!(select_lod(2.49), 2);
+        assert_eq!(select_lod(2.51), 3);
+        assert_eq!(select_lod(10.0), 3);
     }
 }

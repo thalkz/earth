@@ -113,12 +113,12 @@ pub async fn load_model(filename: &str) -> anyhow::Result<Model> {
                 })
                 .collect::<Vec<_>>();
 
-            Mesh {
-                name: m.name,
+            Mesh::new(
+                m.name,
                 vertices,
-                indices: m.mesh.indices,
-                material_index: m.mesh.material_id.unwrap_or(0),
-            }
+                m.mesh.indices,
+                m.mesh.material_id.unwrap_or(0),
+            )
         })
         .collect::<Vec<_>>();
 
