@@ -158,8 +158,8 @@ mod tests {
         let result = pollster::block_on(Earth::load(
             64,
             2,
-            "earth/elevation.dds",
-            "earth/diffuse.dds",
+            "earth/elevation_4096x2048.dds",
+            "earth/diffuse_4096x2048.dds",
         ));
         assert!(result.is_ok());
         let earth = result.unwrap();

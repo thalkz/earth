@@ -31,7 +31,16 @@ impl Scene {
         let light = Light::new(glam::vec3(2.0, 0.0, 2.0), glam::vec3(1.0, 1.0, 1.0));
         let gizmos = Gizmos::new();
 
-        let earth = Earth::load(256, 8, "earth/elevation.dds", "earth/diffuse.dds").await?;
+        const TEXTURE_SIZE: (u32, u32) = (4096, 2048);
+        const EARTH_FACE_SUBDIVISION: usize = 2;
+        const SUBDIVISION_RESOLUTION: usize = 256;
+        let earth = Earth::load(
+            SUBDIVISION_RESOLUTION,
+            EARTH_FACE_SUBDIVISION,
+            &format!("earth/elevation_{}x{}.dds", TEXTURE_SIZE.0, TEXTURE_SIZE.1),
+            &format!("earth/diffuse_{}x{}.dds", TEXTURE_SIZE.0, TEXTURE_SIZE.1),
+        )
+        .await?;
 
         Ok(Self {
             config,

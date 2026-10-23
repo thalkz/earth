@@ -166,8 +166,8 @@ fn convert_gebco_to_normal_elevation_rgba8(
     );
     let start = Instant::now();
 
-    let width = 8192usize;
-    let height = 4096usize;
+    let width = OUTPUT_SIZE.width as usize;
+    let height = OUTPUT_SIZE.height as usize;
     let tile_w = width / 4; // 2048
     let tile_h = height / 2; // 2048
 
@@ -341,10 +341,7 @@ fn convert_gebco_to_normal_elevation_rgba8(
     Ok(())
 }
 
-fn convert_image_to_rgba8(
-    input_path: &Path,
-    output_dds: &Path,
-) -> anyhow::Result<()> {
+fn convert_image_to_rgba8(input_path: &Path, output_dds: &Path) -> anyhow::Result<()> {
     println!("Converting {:?} to RGBA8 DDS...", input_path);
     let start = Instant::now();
 
@@ -353,65 +350,66 @@ fn convert_image_to_rgba8(
     let img = reader.decode()?;
     let (width, height) = (img.width(), img.height());
 
-    let (target_w, target_h, rgba_bytes) = if width > 8192 || height > 4096 {
-        println!(
-            "Image dimensions ({}x{}) exceed GPU limit (8192x4096). Resampling with Rayon...",
-            width, height
-        );
-        let resample_start = Instant::now();
-        let target_w = 8192u32;
-        let target_h = 4096u32;
-        let rgb = img.to_rgb8();
-        let src_raw = rgb.as_raw();
-        let sw = width as usize;
-        let sh = height as usize;
-        let tw = target_w as usize;
-        let th = target_h as usize;
+    let (target_w, target_h, rgba_bytes) =
+        if width > OUTPUT_SIZE.width || height > OUTPUT_SIZE.height {
+            println!(
+                "Image dimensions ({}x{}) exceed GPU limit (8192x4096). Resampling with Rayon...",
+                width, height
+            );
+            let resample_start = Instant::now();
+            let target_w = OUTPUT_SIZE.width;
+            let target_h = OUTPUT_SIZE.height;
+            let rgb = img.to_rgb8();
+            let src_raw = rgb.as_raw();
+            let sw = width as usize;
+            let sh = height as usize;
+            let tw = target_w as usize;
+            let th = target_h as usize;
 
-        let mut out_bytes = vec![0u8; tw * th * 4];
-        out_bytes
-            .par_chunks_exact_mut(tw * 4)
-            .enumerate()
-            .for_each(|(dy, row)| {
-                let v = (dy as f32 + 0.5) / th as f32;
-                let sy_f = v * sh as f32 - 0.5;
-                let y0 = (sy_f.floor() as usize).clamp(0, sh - 1);
-                let y1 = (y0 + 1).min(sh - 1);
-                let fy = (sy_f - y0 as f32).clamp(0.0, 1.0);
+            let mut out_bytes = vec![0u8; tw * th * 4];
+            out_bytes
+                .par_chunks_exact_mut(tw * 4)
+                .enumerate()
+                .for_each(|(dy, row)| {
+                    let v = (dy as f32 + 0.5) / th as f32;
+                    let sy_f = v * sh as f32 - 0.5;
+                    let y0 = (sy_f.floor() as usize).clamp(0, sh - 1);
+                    let y1 = (y0 + 1).min(sh - 1);
+                    let fy = (sy_f - y0 as f32).clamp(0.0, 1.0);
 
-                for dx in 0..tw {
-                    let u = (dx as f32 + 0.5) / tw as f32;
-                    let sx_f = u * sw as f32 - 0.5;
-                    let x0 = (sx_f.floor() as usize).clamp(0, sw - 1);
-                    let x1 = (x0 + 1) % sw;
-                    let fx = (sx_f - x0 as f32).clamp(0.0, 1.0);
+                    for dx in 0..tw {
+                        let u = (dx as f32 + 0.5) / tw as f32;
+                        let sx_f = u * sw as f32 - 0.5;
+                        let x0 = (sx_f.floor() as usize).clamp(0, sw - 1);
+                        let x1 = (x0 + 1) % sw;
+                        let fx = (sx_f - x0 as f32).clamp(0.0, 1.0);
 
-                    let idx00 = (y0 * sw + x0) * 3;
-                    let idx10 = (y0 * sw + x1) * 3;
-                    let idx01 = (y1 * sw + x0) * 3;
-                    let idx11 = (y1 * sw + x1) * 3;
+                        let idx00 = (y0 * sw + x0) * 3;
+                        let idx10 = (y0 * sw + x1) * 3;
+                        let idx01 = (y1 * sw + x0) * 3;
+                        let idx11 = (y1 * sw + x1) * 3;
 
-                    let off = dx * 4;
-                    for c in 0..3 {
-                        let c00 = src_raw[idx00 + c] as f32;
-                        let c10 = src_raw[idx10 + c] as f32;
-                        let c01 = src_raw[idx01 + c] as f32;
-                        let c11 = src_raw[idx11 + c] as f32;
+                        let off = dx * 4;
+                        for c in 0..3 {
+                            let c00 = src_raw[idx00 + c] as f32;
+                            let c10 = src_raw[idx10 + c] as f32;
+                            let c01 = src_raw[idx01 + c] as f32;
+                            let c11 = src_raw[idx11 + c] as f32;
 
-                        let top = c00 * (1.0 - fx) + c10 * fx;
-                        let bot = c01 * (1.0 - fx) + c11 * fx;
-                        let val = top * (1.0 - fy) + bot * fy;
-                        row[off + c] = val.round() as u8;
+                            let top = c00 * (1.0 - fx) + c10 * fx;
+                            let bot = c01 * (1.0 - fx) + c11 * fx;
+                            let val = top * (1.0 - fy) + bot * fy;
+                            row[off + c] = val.round() as u8;
+                        }
+                        row[off + 3] = 255;
                     }
-                    row[off + 3] = 255;
-                }
-            });
-        println!("Resampled in {:?}", resample_start.elapsed());
-        (target_w, target_h, out_bytes)
-    } else {
-        let rgba = img.into_rgba8();
-        (width, height, rgba.into_raw())
-    };
+                });
+            println!("Resampled in {:?}", resample_start.elapsed());
+            (target_w, target_h, out_bytes)
+        } else {
+            let rgba = img.into_rgba8();
+            (width, height, rgba.into_raw())
+        };
 
     write_dds_file(output_dds, target_w, target_h, &rgba_bytes)?;
 
@@ -427,25 +425,41 @@ fn convert_image_to_rgba8(
     Ok(())
 }
 
-fn main() -> anyhow::Result<()> {
-    let gebco_res = Path::new("res/in/gebco_2026_geotiff");
-    let gebco_in = Path::new("in/gebco_2026_geotiff");
-    let elev_dds = Path::new("res/earth/elevation.dds");
+struct Size {
+    width: u32,
+    height: u32,
+}
 
-    if gebco_res.exists() {
-        convert_gebco_to_normal_elevation_rgba8(gebco_res, elev_dds)?;
-    } else if gebco_in.exists() {
-        convert_gebco_to_normal_elevation_rgba8(gebco_in, elev_dds)?;
+const OUTPUT_SIZE: Size = Size {
+    width: 4096,
+    height: 2048,
+};
+
+fn main() -> anyhow::Result<()> {
+    let elevation_input = Path::new("res/in/gebco_2026_geotiff");
+    let elevation_output = &format!(
+        "res/earth/elevation_{}x{}.dds",
+        OUTPUT_SIZE.width, OUTPUT_SIZE.height
+    );
+    let elevation_output = Path::new(elevation_output);
+
+    if elevation_input.exists() {
+        convert_gebco_to_normal_elevation_rgba8(elevation_input, elevation_output)?;
+    } else {
+        println!("{} is missing", elevation_input.to_str().unwrap());
     }
 
-    let diff_tif = Path::new("res/in/diffuse.tif");
-    let diff_alt_tif = Path::new("in/diffuse.tif");
-    let diff_dds = Path::new("res/earth/diffuse.dds");
+    let diffuse_input = Path::new("res/in/diffuse.tif");
+    let diffuse_output = &format!(
+        "res/earth/diffuse_{}x{}.dds",
+        OUTPUT_SIZE.width, OUTPUT_SIZE.height
+    );
+    let diffuse_output = Path::new(&diffuse_output);
 
-    if diff_tif.exists() {
-        convert_image_to_rgba8(diff_tif, diff_dds)?;
-    } else if diff_alt_tif.exists() {
-        convert_image_to_rgba8(diff_alt_tif, diff_dds)?;
+    if diffuse_input.exists() {
+        convert_image_to_rgba8(diffuse_input, diffuse_output)?;
+    } else {
+        println!("{} is missing", diffuse_input.to_str().unwrap());
     }
 
     Ok(())
@@ -543,6 +557,9 @@ mod tests {
         let light_from_east = Vec3::new(2.0, 0.0, 2.0).normalize();
         let light_from_west = Vec3::new(2.0, 0.0, -2.0).normalize();
 
-        assert!(n.dot(light_from_west) > n.dot(light_from_east), "West slope must face West!");
+        assert!(
+            n.dot(light_from_west) > n.dot(light_from_east),
+            "West slope must face West!"
+        );
     }
 }
