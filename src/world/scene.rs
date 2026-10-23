@@ -63,7 +63,7 @@ impl Scene {
         self.camera_controller
             .update_camera(&mut self.camera, input, dt, viewport_size);
 
-        let rotation_speed = 60.0_f32.to_radians();
+        let rotation_speed = 10.0_f32.to_radians();
         let rotation = Quat::from_axis_angle(Vec3::Y, rotation_speed * dt.as_secs_f32());
         self.light.direction = (rotation * self.light.direction).normalize();
 

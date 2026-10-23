@@ -39,8 +39,15 @@ fn vs_main(
 ) -> VertexOutput {
     let unit_position = normalize(vertex.position);
     let uv = vertex.tex_coords;
+    let camera_dist = length(camera.view_pos.xyz - unit_position);
 
-    let elevation_sample = textureSampleLevel(texture_elevation, sampler_elevation, uv, 0.0);
+    let min_dist = 1.0;
+    let max_dist = 2.0;
+    let t = clamp((camera_dist - min_dist) / (max_dist - min_dist), 0.0, 1.0);
+    let target_lod = t * 6.0;
+
+    let elevation_sample = textureSampleLevel(texture_elevation, sampler_elevation, vertex.tex_coords, target_lod);
+
     let elevation = elevation_sample.a; // alpha channel is elevation
     let height_scale = 0.03;
     let displaced_position = unit_position * (1.0 + elevation * height_scale);
