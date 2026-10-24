@@ -33,7 +33,8 @@ var sampler_elevation: sampler;
 fn vs_main(
     vertex: VertexInput,
 ) -> VertexOutput {
-    let unit_position = normalize(vertex.position);
+    let base_radius = length(vertex.position);
+    let unit_position = vertex.position / base_radius;
     let camera_dist = length(camera.view_pos.xyz - unit_position);
 
     let min_dist = 1.0;
@@ -45,7 +46,7 @@ fn vs_main(
 
     let elevation = elevation_sample.a; // alpha channel is elevation
     let height_scale = 0.03;
-    let displaced_position = unit_position * (1.0 + elevation * height_scale);
+    let displaced_position = unit_position * (base_radius + elevation * height_scale);
 
     var out: VertexOutput;
     out.clip_position = camera.view_proj * vec4<f32>(displaced_position, 1.0);

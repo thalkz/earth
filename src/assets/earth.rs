@@ -113,24 +113,35 @@ fn create_face_part(
     let axis_v = normal.cross(axis_u);
     let to_cube = |t: Vec2| normal + axis_u * (2.0 * t.x - 1.0) + axis_v * (2.0 * t.y - 1.0);
 
-    let mut vertices: Vec<Vertex> = {
-        let vertices_count = resolution * resolution;
-        Vec::with_capacity(vertices_count)
-    };
+    let mut vertices = Vec::with_capacity(resolution * resolution + 4 * resolution);
 
+    // 1. Surface grid vertices (radius = 1.0)
     for y in 0..resolution {
         for x in 0..resolution {
             let local_t = Vec2::new(x as f32, y as f32) / (resolution - 1) as f32;
             let t = (Vec2::new(part_x as f32, part_y as f32) + local_t) / subdivisions as f32;
-
-            let sphere_position = to_sphere_point(to_cube(t));
-
-            let vertex = Vertex {
-                position: sphere_position.into(),
-            };
-            vertices.push(vertex);
+            let sphere_pos = to_sphere_point(to_cube(t));
+            vertices.push(Vertex {
+                position: sphere_pos.into(),
+            });
         }
     }
+
+    // 2. Skirt vertices along the 4 edges (radius = 0.98, ~127 km deep into Earth)
+    const SKIRT_RADIUS_SCALE: f32 = 0.98;
+    let y_max = (resolution - 1) * resolution;
+    let x_max = resolution - 1;
+    let skirt_indices = (0..resolution)
+        .chain((0..resolution).map(|i| y_max + i))
+        .chain((0..resolution).map(|i| i * resolution))
+        .chain((0..resolution).map(|i| i * resolution + x_max));
+
+    let skirt_vertices: Vec<Vertex> = skirt_indices
+        .map(|idx| Vertex {
+            position: (Vec3::from(vertices[idx].position) * SKIRT_RADIUS_SCALE).into(),
+        })
+        .collect();
+    vertices.extend(skirt_vertices);
 
     Mesh::with_lods(
         format!("cube_face_{normal:?}_{part_x}_{part_y}"),
@@ -143,32 +154,46 @@ fn create_face_part(
 
 fn generate_lod_indices(resolution: usize, step: usize) -> Vec<u32> {
     let mut indices = Vec::new();
-    let mut y = 0;
-    while y < resolution - 1 {
+
+    // 1. Surface grid triangles
+    for y in (0..resolution - 1).step_by(step) {
         let next_y = (y + step).min(resolution - 1);
-        let mut x = 0;
-        while x < resolution - 1 {
+        for x in (0..resolution - 1).step_by(step) {
             let next_x = (x + step).min(resolution - 1);
-
-            let top_left = (y * resolution + x) as u32;
-            let top_right = (y * resolution + next_x) as u32;
-            let bottom_left = (next_y * resolution + x) as u32;
-            let bottom_right = (next_y * resolution + next_x) as u32;
-
-            // First triangle: top_left -> bottom_right -> bottom_left
-            indices.push(top_left);
-            indices.push(bottom_right);
-            indices.push(bottom_left);
-
-            // Second triangle: top_left -> top_right -> bottom_right
-            indices.push(top_left);
-            indices.push(top_right);
-            indices.push(bottom_right);
-
-            x = next_x;
+            let tl = (y * resolution + x) as u32;
+            let tr = (y * resolution + next_x) as u32;
+            let bl = (next_y * resolution + x) as u32;
+            let br = (next_y * resolution + next_x) as u32;
+            indices.extend_from_slice(&[tl, br, bl, tl, tr, br]);
         }
-        y = next_y;
     }
+
+    // 2. Skirt vertical walls (parameterized: top_start, top_stride, skirt_start, flip)
+    let r = resolution as u32;
+    let edges = [
+        (0, 1, r * r, false),              // Edge 0: y = 0
+        ((r - 1) * r, 1, r * r + r, true), // Edge 1: y = resolution - 1
+        (0, r, r * r + 2 * r, true),       // Edge 2: x = 0
+        (r - 1, r, r * r + 3 * r, false),  // Edge 3: x = resolution - 1
+    ];
+
+    for (top_start, top_stride, skirt_start, flip) in edges {
+        for i in (0..resolution - 1).step_by(step) {
+            let next_i = (i + step).min(resolution - 1);
+            let top_a = top_start + i as u32 * top_stride;
+            let top_b = top_start + next_i as u32 * top_stride;
+            let skirt_a = skirt_start + i as u32;
+            let skirt_b = skirt_start + next_i as u32;
+
+            let quad = if !flip {
+                [top_a, skirt_a, skirt_b, top_a, skirt_b, top_b]
+            } else {
+                [top_b, skirt_b, skirt_a, top_b, skirt_a, top_a]
+            };
+            indices.extend_from_slice(&quad);
+        }
+    }
+
     indices
 }
 
