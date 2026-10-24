@@ -141,50 +141,43 @@ pub fn parse_dds(mut data: Vec<u8>) -> anyhow::Result<ImageAsset> {
 
     let mut cur_w = width;
     let mut cur_h = height;
-    let mut mip_sizes = Vec::with_capacity(mip_count as usize);
-    let mut total_expected_bytes = 0usize;
+    let mut mip_offsets = Vec::with_capacity(mip_count as usize);
+    let mut current_offset = header_size;
 
     for _ in 0..mip_count {
         let level_len = (cur_w as usize) * (cur_h as usize) * 4;
-        mip_sizes.push(level_len);
-        total_expected_bytes += level_len;
+        let next_offset = current_offset + level_len;
+        mip_offsets.push(current_offset..next_offset);
+        current_offset = next_offset;
         cur_w = (cur_w / 2).max(1);
         cur_h = (cur_h / 2).max(1);
     }
 
-    let actual_payload = data.len().saturating_sub(header_size);
-    if actual_payload < total_expected_bytes {
+    if data.len() < current_offset {
         anyhow::bail!(
             "DDS payload truncated: expected at least {} bytes for {} mips, got {}",
-            total_expected_bytes,
+            current_offset,
             mip_count,
-            actual_payload
+            data.len()
         );
     }
 
-    // Drop the header bytes so only pixel bytes remain
-    data.drain(0..header_size);
-    data.truncate(total_expected_bytes);
+    // Truncate any trailing padding without reallocating
+    data.truncate(current_offset);
 
-    // If pixel order is BGRA, swizzle B and R to RGBA
+    // If pixel order is BGRA, swizzle B and R to RGBA in-place
     if is_bgra {
-        data.par_chunks_exact_mut(4).for_each(|pixel| {
-            pixel.swap(0, 2);
-        });
+        data[header_size..current_offset]
+            .par_chunks_exact_mut(4)
+            .for_each(|pixel| {
+                pixel.swap(0, 2);
+            });
     }
-
-    let mut mip_levels = Vec::with_capacity(mip_count as usize);
-    let mut remaining = data;
-    for &level_len in &mip_sizes[..mip_sizes.len().saturating_sub(1)] {
-        let next = remaining.split_off(level_len);
-        mip_levels.push(remaining);
-        remaining = next;
-    }
-    mip_levels.push(remaining);
 
     Ok(ImageAsset {
         width,
         height,
-        mip_levels,
+        data,
+        mip_offsets,
     })
 }

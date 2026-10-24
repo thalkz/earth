@@ -193,13 +193,14 @@ fn create_elevation_texture(
     sampler: &Sampler,
     image: &ImageAsset,
 ) -> BindGroup {
+    let mip_levels: Vec<&[u8]> = image.mip_levels().collect();
     let elevation_texture = Texture::create_2d(
         device,
         queue,
         image.width,
         image.height,
         TextureFormat::Rgba8Unorm,
-        &image.mip_levels,
+        &mip_levels,
         Some("elevation"),
     );
 

@@ -49,13 +49,14 @@ impl RenderModel {
             .map(|material| {
                 let image = &material.diffuse;
 
+                let mip_levels: Vec<&[u8]> = image.mip_levels().collect();
                 let texture = Texture::create_2d(
                     device,
                     queue,
                     image.width,
                     image.height,
                     TextureFormat::Rgba8UnormSrgb,
-                    &image.mip_levels,
+                    &mip_levels,
                     Some(&material.name),
                 );
 
