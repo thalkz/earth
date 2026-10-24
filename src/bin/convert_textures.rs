@@ -7,20 +7,43 @@ use std::io::Write;
 use std::path::Path;
 use std::time::Instant;
 
-fn write_dds_file<P: AsRef<Path>>(
+fn write_dds_cubemap<P: AsRef<Path>>(
     path: P,
-    width: u32,
-    height: u32,
-    mip_levels: &[Vec<u8>],
+    face_size: u32,
+    mip_levels_all_faces: &[Vec<u8>], // Total count: 6 * mip_count
 ) -> std::io::Result<()> {
-    let header = DdsHeader::new_rgba8(width, height, mip_levels.len() as u32);
+    let mip_count_per_face = (mip_levels_all_faces.len() / 6) as u32;
+    let header = DdsHeader::new_rgba8_cubemap(face_size, mip_count_per_face);
     let mut file = File::create(path)?;
     file.write_all(&DDS_MAGIC.to_le_bytes())?;
     file.write_all(bytemuck::bytes_of(&header))?;
-    for level in mip_levels {
+    for level in mip_levels_all_faces {
         file.write_all(level)?;
     }
     Ok(())
+}
+
+fn cube_uv_to_direction(face: usize, u: f32, v: f32) -> Vec3 {
+    // Face convention matching standard DirectX/wgpu Cubemap:
+    // 0: +X, 1: -X, 2: +Y, 3: -Y, 4: +Z, 5: -Z
+    match face {
+        0 => Vec3::new(1.0, -v, -u),
+        1 => Vec3::new(-1.0, -v, u),
+        2 => Vec3::new(u, 1.0, v),
+        3 => Vec3::new(u, -1.0, -v),
+        4 => Vec3::new(u, -v, 1.0),
+        5 => Vec3::new(-u, -v, -1.0),
+        _ => unreachable!(),
+    }
+    .normalize()
+}
+
+fn direction_to_equirect_uv(dir: Vec3) -> (f32, f32) {
+    let lat = dir.y.clamp(-1.0, 1.0).asin();
+    let lng = dir.x.atan2(-dir.z);
+    let u = (0.5 - lng / (2.0 * PI)).rem_euclid(1.0);
+    let v = (0.5 - lat / PI).clamp(0.0, 1.0);
+    (u, v)
 }
 
 fn compute_mip_count(width: u32, height: u32) -> u32 {
@@ -223,8 +246,10 @@ fn convert_gebco_to_normal_elevation_rgba8(
     );
     let start = Instant::now();
 
-    let width = OUTPUT_SIZE.width as usize;
-    let height = OUTPUT_SIZE.height as usize;
+    const EQUIRECT_WIDTH: usize = 8192;
+    const EQUIRECT_HEIGHT: usize = 4096;
+    let width = EQUIRECT_WIDTH;
+    let height = EQUIRECT_HEIGHT;
     let tile_w = width / 4; // 2048
     let tile_h = height / 2; // 2048
 
@@ -379,145 +404,174 @@ fn convert_gebco_to_normal_elevation_rgba8(
         });
 
     println!(
-        "Normals computed in {:?}! Generating mipmaps...",
+        "Normals computed in {:?}! Projecting into 6 cubemap faces...",
         start.elapsed()
     );
-    let mip_start = Instant::now();
-    let mip_levels = generate_mipmaps_normal_elevation(rgba_bytes, width as u32, height as u32);
-    let total_bytes: usize = mip_levels.iter().map(|m| m.len()).sum();
+    let cube_start = Instant::now();
+    let face_size = CUBE_FACE_SIZE;
+    let mut all_cubemap_mips = Vec::new();
+
+    for face in 0..6 {
+        println!("Resampling face {}/6...", face + 1);
+        let mut face_bytes = vec![0u8; (face_size * face_size * 4) as usize];
+        face_bytes
+            .par_chunks_exact_mut((face_size * 4) as usize)
+            .enumerate()
+            .for_each(|(fy, row)| {
+                let v = ((fy as f32 + 0.5) / face_size as f32) * 2.0 - 1.0;
+                for fx in 0..face_size {
+                    let u = ((fx as f32 + 0.5) / face_size as f32) * 2.0 - 1.0;
+                    let dir = cube_uv_to_direction(face, u, v);
+                    let (eq_u, eq_v) = direction_to_equirect_uv(dir);
+
+                    let sx_f = eq_u * width as f32 - 0.5;
+                    let sy_f = eq_v * height as f32 - 0.5;
+
+                    let x0 = (sx_f.floor() as usize).clamp(0, width - 1);
+                    let x1 = (x0 + 1) % width;
+                    let y0 = (sy_f.floor() as usize).clamp(0, height - 1);
+                    let y1 = (y0 + 1).min(height - 1);
+
+                    let fx_w = (sx_f - x0 as f32).clamp(0.0, 1.0);
+                    let fy_w = (sy_f - y0 as f32).clamp(0.0, 1.0);
+
+                    let off00 = (y0 * width + x0) * 4;
+                    let off10 = (y0 * width + x1) * 4;
+                    let off01 = (y1 * width + x0) * 4;
+                    let off11 = (y1 * width + x1) * 4;
+
+                    let off = (fx * 4) as usize;
+                    for c in 0..4 {
+                        let c00 = rgba_bytes[off00 + c] as f32;
+                        let c10 = rgba_bytes[off10 + c] as f32;
+                        let c01 = rgba_bytes[off01 + c] as f32;
+                        let c11 = rgba_bytes[off11 + c] as f32;
+
+                        let top = c00 * (1.0 - fx_w) + c10 * fx_w;
+                        let bot = c01 * (1.0 - fx_w) + c11 * fx_w;
+                        let val = top * (1.0 - fy_w) + bot * fy_w;
+                        row[off + c] = val.round() as u8;
+                    }
+                }
+            });
+
+        let face_mips = generate_mipmaps_normal_elevation(face_bytes, face_size, face_size);
+        all_cubemap_mips.extend(face_mips);
+    }
+
     println!(
-        "Generated {} mip levels in {:?}! Writing DDS to {:?}...",
-        mip_levels.len(),
-        mip_start.elapsed(),
+        "Cubemap faces generated in {:?}! Writing DDS to {:?}...",
+        cube_start.elapsed(),
         output_dds
     );
+    write_dds_cubemap(output_dds, face_size, &all_cubemap_mips)?;
 
-    write_dds_file(output_dds, width as u32, height as u32, &mip_levels)?;
-
+    let total_bytes: usize = all_cubemap_mips.iter().map(|m| m.len()).sum();
     println!(
-        "Done in {:?}! Saved {:?} ({}x{}, {} bytes across {} mip levels)",
+        "Done in {:?}! Saved {:?} (6 faces of {}x{}, {} bytes total)",
         start.elapsed(),
         output_dds,
-        width,
-        height,
-        total_bytes + 128,
-        mip_levels.len()
+        face_size,
+        face_size,
+        total_bytes + 128
     );
 
     Ok(())
 }
 
 fn convert_image_to_rgba8(input_path: &Path, output_dds: &Path) -> anyhow::Result<()> {
-    println!("Converting {:?} to RGBA8 DDS...", input_path);
+    println!("Converting {:?} to RGBA8 Cubemap DDS...", input_path);
     let start = Instant::now();
 
     let mut reader = image::io::Reader::open(input_path)?;
     reader.no_limits();
     let img = reader.decode()?;
-    let (width, height) = (img.width(), img.height());
+    let rgb = img.to_rgb8();
+    let src_w = rgb.width() as usize;
+    let src_h = rgb.height() as usize;
+    let src_raw = rgb.as_raw();
 
-    let (target_w, target_h, rgba_bytes) =
-        if width > OUTPUT_SIZE.width || height > OUTPUT_SIZE.height {
-            println!(
-                "Image dimensions ({}x{}) exceed GPU limit (8192x4096). Resampling with Rayon...",
-                width, height
-            );
-            let resample_start = Instant::now();
-            let target_w = OUTPUT_SIZE.width;
-            let target_h = OUTPUT_SIZE.height;
-            let rgb = img.to_rgb8();
-            let src_raw = rgb.as_raw();
-            let sw = width as usize;
-            let sh = height as usize;
-            let tw = target_w as usize;
-            let th = target_h as usize;
+    println!("Projecting diffuse into 6 cubemap faces...");
+    let cube_start = Instant::now();
+    let face_size = CUBE_FACE_SIZE;
+    let mut all_cubemap_mips = Vec::new();
 
-            let mut out_bytes = vec![0u8; tw * th * 4];
-            out_bytes
-                .par_chunks_exact_mut(tw * 4)
-                .enumerate()
-                .for_each(|(dy, row)| {
-                    let v = (dy as f32 + 0.5) / th as f32;
-                    let sy_f = v * sh as f32 - 0.5;
-                    let y0 = (sy_f.floor() as usize).clamp(0, sh - 1);
-                    let y1 = (y0 + 1).min(sh - 1);
-                    let fy = (sy_f - y0 as f32).clamp(0.0, 1.0);
+    for face in 0..6 {
+        println!("Resampling diffuse face {}/6...", face + 1);
+        let mut face_bytes = vec![0u8; (face_size * face_size * 4) as usize];
+        face_bytes
+            .par_chunks_exact_mut((face_size * 4) as usize)
+            .enumerate()
+            .for_each(|(fy, row)| {
+                let v = ((fy as f32 + 0.5) / face_size as f32) * 2.0 - 1.0;
+                for fx in 0..face_size {
+                    let u = ((fx as f32 + 0.5) / face_size as f32) * 2.0 - 1.0;
+                    let dir = cube_uv_to_direction(face, u, v);
+                    let (eq_u, eq_v) = direction_to_equirect_uv(dir);
 
-                    for dx in 0..tw {
-                        let u = (dx as f32 + 0.5) / tw as f32;
-                        let sx_f = u * sw as f32 - 0.5;
-                        let x0 = (sx_f.floor() as usize).clamp(0, sw - 1);
-                        let x1 = (x0 + 1) % sw;
-                        let fx = (sx_f - x0 as f32).clamp(0.0, 1.0);
+                    let sx_f = eq_u * src_w as f32 - 0.5;
+                    let sy_f = eq_v * src_h as f32 - 0.5;
 
-                        let idx00 = (y0 * sw + x0) * 3;
-                        let idx10 = (y0 * sw + x1) * 3;
-                        let idx01 = (y1 * sw + x0) * 3;
-                        let idx11 = (y1 * sw + x1) * 3;
+                    let x0 = (sx_f.floor() as usize).clamp(0, src_w - 1);
+                    let x1 = (x0 + 1) % src_w;
+                    let y0 = (sy_f.floor() as usize).clamp(0, src_h - 1);
+                    let y1 = (y0 + 1).min(src_h - 1);
 
-                        let off = dx * 4;
-                        for c in 0..3 {
-                            let c00 = src_raw[idx00 + c] as f32;
-                            let c10 = src_raw[idx10 + c] as f32;
-                            let c01 = src_raw[idx01 + c] as f32;
-                            let c11 = src_raw[idx11 + c] as f32;
+                    let fx_w = (sx_f - x0 as f32).clamp(0.0, 1.0);
+                    let fy_w = (sy_f - y0 as f32).clamp(0.0, 1.0);
 
-                            let top = c00 * (1.0 - fx) + c10 * fx;
-                            let bot = c01 * (1.0 - fx) + c11 * fx;
-                            let val = top * (1.0 - fy) + bot * fy;
-                            row[off + c] = val.round() as u8;
-                        }
-                        row[off + 3] = 255;
+                    let off00 = (y0 * src_w + x0) * 3;
+                    let off10 = (y0 * src_w + x1) * 3;
+                    let off01 = (y1 * src_w + x0) * 3;
+                    let off11 = (y1 * src_w + x1) * 3;
+
+                    let off = (fx * 4) as usize;
+                    for c in 0..3 {
+                        let c00 = src_raw[off00 + c] as f32;
+                        let c10 = src_raw[off10 + c] as f32;
+                        let c01 = src_raw[off01 + c] as f32;
+                        let c11 = src_raw[off11 + c] as f32;
+
+                        let top = c00 * (1.0 - fx_w) + c10 * fx_w;
+                        let bot = c01 * (1.0 - fx_w) + c11 * fx_w;
+                        let val = top * (1.0 - fy_w) + bot * fy_w;
+                        row[off + c] = val.round() as u8;
                     }
-                });
-            println!("Resampled in {:?}", resample_start.elapsed());
-            (target_w, target_h, out_bytes)
-        } else {
-            let rgba = img.into_rgba8();
-            (width, height, rgba.into_raw())
-        };
+                    row[off + 3] = 255;
+                }
+            });
 
-    println!("Generating diffuse mipmaps...");
-    let mip_start = Instant::now();
-    let mip_levels = generate_mipmaps_diffuse(rgba_bytes, target_w, target_h);
-    let total_bytes: usize = mip_levels.iter().map(|m| m.len()).sum();
+        let face_mips = generate_mipmaps_diffuse(face_bytes, face_size, face_size);
+        all_cubemap_mips.extend(face_mips);
+    }
+
     println!(
-        "Generated {} mip levels in {:?}! Writing DDS to {:?}...",
-        mip_levels.len(),
-        mip_start.elapsed(),
+        "Diffuse cubemap generated in {:?}! Writing DDS to {:?}...",
+        cube_start.elapsed(),
         output_dds
     );
+    write_dds_cubemap(output_dds, face_size, &all_cubemap_mips)?;
 
-    write_dds_file(output_dds, target_w, target_h, &mip_levels)?;
-
+    let total_bytes: usize = all_cubemap_mips.iter().map(|m| m.len()).sum();
     println!(
-        "Done in {:?}! Saved {:?} ({}x{}, {} bytes across {} mip levels)",
+        "Done in {:?}! Saved {:?} (6 faces of {}x{}, {} bytes total)",
         start.elapsed(),
         output_dds,
-        target_w,
-        target_h,
-        total_bytes + 128,
-        mip_levels.len()
+        face_size,
+        face_size,
+        total_bytes + 128
     );
 
     Ok(())
 }
 
-struct Size {
-    width: u32,
-    height: u32,
-}
-
-const OUTPUT_SIZE: Size = Size {
-    width: 8192,
-    height: 4096,
-};
+const CUBE_FACE_SIZE: u32 = 2048;
 
 fn main() -> anyhow::Result<()> {
     let elevation_input = Path::new("res/in/gebco_2026_geotiff");
     let elevation_output = &format!(
-        "res/earth/elevation_{}x{}.dds",
-        OUTPUT_SIZE.width, OUTPUT_SIZE.height
+        "res/earth/elevation_cube_{}x{}.dds",
+        CUBE_FACE_SIZE, CUBE_FACE_SIZE
     );
     let elevation_output = Path::new(elevation_output);
 
@@ -529,8 +583,8 @@ fn main() -> anyhow::Result<()> {
 
     let diffuse_input = Path::new("res/in/diffuse.tif");
     let diffuse_output = &format!(
-        "res/earth/diffuse_{}x{}.dds",
-        OUTPUT_SIZE.width, OUTPUT_SIZE.height
+        "res/earth/diffuse_cube_{}x{}.dds",
+        CUBE_FACE_SIZE, CUBE_FACE_SIZE
     );
     let diffuse_output = Path::new(&diffuse_output);
 

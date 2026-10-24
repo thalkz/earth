@@ -40,16 +40,23 @@ pub struct Material {
 }
 
 #[derive(Clone, Debug)]
-pub struct ImageAsset {
-    pub width: u32,
-    pub height: u32,
-    pub data: Vec<u8>,
-    pub mip_offsets: Vec<Range<usize>>,
+pub enum ImageAsset {
+    Cubemap {
+        width: u32,
+        #[allow(dead_code)]
+        height: u32,
+        data: Vec<u8>,
+        mip_offsets: Vec<Range<usize>>,
+    },
 }
 
 impl ImageAsset {
     pub fn mip_levels(&self) -> impl Iterator<Item = &[u8]> {
-        self.mip_offsets.iter().map(|range| &self.data[range.clone()])
+        match self {
+            ImageAsset::Cubemap {
+                data, mip_offsets, ..
+            } => mip_offsets.iter().map(|range| &data[range.clone()]),
+        }
     }
 }
 
@@ -57,5 +64,4 @@ impl ImageAsset {
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Vertex {
     pub position: [f32; 3],
-    pub tex_coords: [f32; 2],
 }

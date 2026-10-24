@@ -42,7 +42,3 @@ impl From<LatLng> for Vec3 {
         Self { x, y, z }
     }
 }
-
-pub fn sphere_to_uv(p: Vec3) -> Vec2 {
-    LatLng::from(p).to_uv()
-}

@@ -148,7 +148,7 @@ impl Texture {
                     visibility: ShaderStages::FRAGMENT,
                     ty: BindingType::Texture {
                         multisampled: false,
-                        view_dimension: TextureViewDimension::D2,
+                        view_dimension: TextureViewDimension::Cube,
                         sample_type: TextureSampleType::Float { filterable: true },
                     },
                     count: None,
@@ -172,7 +172,7 @@ impl Texture {
                     visibility: ShaderStages::VERTEX_FRAGMENT,
                     ty: BindingType::Texture {
                         multisampled: false,
-                        view_dimension: TextureViewDimension::D2,
+                        view_dimension: TextureViewDimension::Cube,
                         sample_type: TextureSampleType::Float { filterable: true },
                     },
                     count: None,

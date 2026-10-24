@@ -1,4 +1,4 @@
-use crate::assets::{Model, Vertex};
+use crate::assets::{ImageAsset, Model, Vertex};
 use crate::geo::BoundingSphere;
 use crate::gpu::Texture;
 use std::mem::{offset_of, size_of};
@@ -48,13 +48,12 @@ impl RenderModel {
             .iter()
             .map(|material| {
                 let image = &material.diffuse;
-
+                let ImageAsset::Cubemap { width, .. } = image;
                 let mip_levels: Vec<&[u8]> = image.mip_levels().collect();
-                let texture = Texture::create_2d(
+                let texture = Texture::create_cube(
                     device,
                     queue,
-                    image.width,
-                    image.height,
+                    *width,
                     TextureFormat::Rgba8UnormSrgb,
                     &mip_levels,
                     Some(&material.name),
@@ -134,16 +133,11 @@ impl RenderModel {
 }
 
 impl Vertex {
-    pub const ATTRIBUTES: [VertexAttribute; 2] = [
+    pub const ATTRIBUTES: [VertexAttribute; 1] = [
         VertexAttribute {
             offset: offset_of!(Vertex, position) as BufferAddress,
             shader_location: 0,
             format: VertexFormat::Float32x3,
-        },
-        VertexAttribute {
-            offset: offset_of!(Vertex, tex_coords) as BufferAddress,
-            shader_location: 1,
-            format: VertexFormat::Float32x2,
         },
     ];
 

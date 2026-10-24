@@ -1,7 +1,4 @@
-use crate::{
-    assets::{self, ImageAsset, Material, Mesh, Model, Vertex},
-    geo,
-};
+use crate::assets::{self, ImageAsset, Material, Mesh, Model, Vertex};
 use glam::{Vec2, Vec3};
 use rayon::prelude::*;
 use std::ops::Range;
@@ -21,9 +18,8 @@ impl Earth {
         elevation_filename: &str,
         diffuse_filename: &str,
     ) -> anyhow::Result<Earth> {
-        anyhow::ensure!(resolution >= 2, "resolution must be at least 2"); // TODO return an error instead
+        anyhow::ensure!(resolution >= 2, "resolution must be at least 2");
         anyhow::ensure!(subdivisions >= 1, "subdivisions must be at least 1");
-        anyhow::ensure!(subdivisions % 2 == 0, "subdivisions must be even");
 
         let (elevation, (meshes, materials)) = rayon::join(
             || create_elevation(elevation_filename),
@@ -117,10 +113,6 @@ fn create_face_part(
     let axis_v = normal.cross(axis_u);
     let to_cube = |t: Vec2| normal + axis_u * (2.0 * t.x - 1.0) + axis_v * (2.0 * t.y - 1.0);
 
-    // Longitude (u) of the patch center, used as a reference to unwrap the vertex UVs.
-    let center_t = (Vec2::new(part_x as f32, part_y as f32) + 0.5) / subdivisions as f32;
-    let center_u = geo::sphere_to_uv(to_sphere_point(to_cube(center_t))).x;
-
     let mut vertices: Vec<Vertex> = {
         let vertices_count = resolution * resolution;
         Vec::with_capacity(vertices_count)
@@ -135,7 +127,6 @@ fn create_face_part(
 
             let vertex = Vertex {
                 position: sphere_position.into(),
-                tex_coords: patch_uv(sphere_position, center_u).into(),
             };
             vertices.push(vertex);
         }
@@ -179,18 +170,6 @@ fn generate_lod_indices(resolution: usize, step: usize) -> Vec<u32> {
         y = next_y;
     }
     indices
-}
-
-fn patch_uv(sphere_position: Vec3, center_u: f32) -> Vec2 {
-    let uv = geo::sphere_to_uv(sphere_position);
-    let at_pole = sphere_position.x.abs() + sphere_position.z.abs() < 1e-6;
-    let u = if at_pole {
-        center_u
-    } else {
-        let du = uv.x - center_u;
-        center_u + (du - du.round())
-    };
-    Vec2::new(u, uv.y)
 }
 
 fn to_sphere_point(from: Vec3) -> Vec3 {

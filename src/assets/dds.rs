@@ -18,6 +18,21 @@ pub const DDSCAPS_COMPLEX: u32 = 0x8;
 pub const DDSCAPS_TEXTURE: u32 = 0x1000;
 pub const DDSCAPS_MIPMAP: u32 = 0x400000;
 
+pub const DDSCAPS2_CUBEMAP: u32 = 0x200;
+pub const DDSCAPS2_CUBEMAP_POSITIVEX: u32 = 0x400;
+pub const DDSCAPS2_CUBEMAP_NEGATIVEX: u32 = 0x800;
+pub const DDSCAPS2_CUBEMAP_POSITIVEY: u32 = 0x1000;
+pub const DDSCAPS2_CUBEMAP_NEGATIVEY: u32 = 0x2000;
+pub const DDSCAPS2_CUBEMAP_POSITIVEZ: u32 = 0x4000;
+pub const DDSCAPS2_CUBEMAP_NEGATIVEZ: u32 = 0x8000;
+pub const DDSCAPS2_CUBEMAP_ALLFACES: u32 = DDSCAPS2_CUBEMAP
+    | DDSCAPS2_CUBEMAP_POSITIVEX
+    | DDSCAPS2_CUBEMAP_NEGATIVEX
+    | DDSCAPS2_CUBEMAP_POSITIVEY
+    | DDSCAPS2_CUBEMAP_NEGATIVEY
+    | DDSCAPS2_CUBEMAP_POSITIVEZ
+    | DDSCAPS2_CUBEMAP_NEGATIVEZ;
+
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct DdsPixelFormat {
@@ -51,20 +66,20 @@ pub struct DdsHeader {
 }
 
 impl DdsHeader {
-    pub fn new_rgba8(width: u32, height: u32, mipmap_count: u32) -> Self {
+    pub fn new_rgba8_cubemap(face_size: u32, mipmap_count: u32) -> Self {
         let mut flags = DDSD_CAPS | DDSD_HEIGHT | DDSD_WIDTH | DDSD_PITCH | DDSD_PIXELFORMAT;
-        let mut caps = DDSCAPS_TEXTURE;
+        let mut caps = DDSCAPS_TEXTURE | DDSCAPS_COMPLEX;
         if mipmap_count > 1 {
             flags |= DDSD_MIPMAPCOUNT;
-            caps |= DDSCAPS_COMPLEX | DDSCAPS_MIPMAP;
+            caps |= DDSCAPS_MIPMAP;
         }
 
         Self {
             size: 124,
             flags,
-            height,
-            width,
-            pitch_or_linear_size: width * 4,
+            height: face_size,
+            width: face_size,
+            pitch_or_linear_size: face_size * 4,
             depth: 1,
             mipmap_count,
             reserved1: [0; 11],
@@ -79,7 +94,7 @@ impl DdsHeader {
                 a_bit_mask: 0xFF00_0000,
             },
             caps,
-            caps2: 0,
+            caps2: DDSCAPS2_CUBEMAP_ALLFACES,
             caps3: 0,
             caps4: 0,
             reserved2: 0,
@@ -139,24 +154,34 @@ pub fn parse_dds(mut data: Vec<u8>) -> anyhow::Result<ImageAsset> {
         1
     };
 
-    let mut cur_w = width;
-    let mut cur_h = height;
-    let mut mip_offsets = Vec::with_capacity(mip_count as usize);
+    let is_cube = header.caps2 & DDSCAPS2_CUBEMAP != 0;
+    if !is_cube {
+        anyhow::bail!("Only cubemap DDS textures are supported");
+    }
+    if width != height {
+        anyhow::bail!("Cubemap faces must be square, got {}x{}", width, height);
+    }
+    const FACE_COUNT: usize = 6;
+
+    let mut mip_offsets = Vec::with_capacity(FACE_COUNT * mip_count as usize);
     let mut current_offset = header_size;
 
-    for _ in 0..mip_count {
-        let level_len = (cur_w as usize) * (cur_h as usize) * 4;
-        let next_offset = current_offset + level_len;
-        mip_offsets.push(current_offset..next_offset);
-        current_offset = next_offset;
-        cur_w = (cur_w / 2).max(1);
-        cur_h = (cur_h / 2).max(1);
+    for _face in 0..FACE_COUNT {
+        let mut cur_size = width;
+        for _ in 0..mip_count {
+            let level_len = (cur_size as usize) * (cur_size as usize) * 4;
+            let next_offset = current_offset + level_len;
+            mip_offsets.push(current_offset..next_offset);
+            current_offset = next_offset;
+            cur_size = (cur_size / 2).max(1);
+        }
     }
 
     if data.len() < current_offset {
         anyhow::bail!(
-            "DDS payload truncated: expected at least {} bytes for {} mips, got {}",
+            "DDS payload truncated: expected at least {} bytes for {} faces x {} mips, got {}",
             current_offset,
+            FACE_COUNT,
             mip_count,
             data.len()
         );
@@ -174,7 +199,7 @@ pub fn parse_dds(mut data: Vec<u8>) -> anyhow::Result<ImageAsset> {
             });
     }
 
-    Ok(ImageAsset {
+    Ok(ImageAsset::Cubemap {
         width,
         height,
         data,

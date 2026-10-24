@@ -6,15 +6,15 @@ A lightweight real-time 3D Earth renderer built in Rust using [wgpu](https://git
 
 ## Features
 
-- **Cube-Sphere Mesh Generation**: Spherified cube topology (6 faces, subdivided into multiple mesh tiles) avoiding polar pinch and texture distortion.
+- **Cube-Sphere Mesh Generation**: Spherified cube topology (6 faces, subdivided into multiple mesh tiles) with compact 12-byte positions and zero UV overhead, avoiding polar pinch and antimeridian texture seams.
 - **Two-Stage Culling**:
   - *Horizon Occlusion Culling*: Computes camera horizon tangency to discard terrain tiles on the back hemisphere (~40–65% geometry culled).
   - *Frustum Culling*: Bounding sphere checks against camera view frustum planes.
 - **GPU Terrain Displacement & Precomputed 3D Normals**:
-  - Displacement in WGSL vertex shaders driven by real-world GEBCO elevation data.
-  - Precomputed 3D Sobel normals mapped across sphere curvature packed into RGBA8 DDS textures.
+  - Displacement in WGSL vertex shaders driven by real-world GEBCO elevation data sampled directly from a native cubemap.
+  - Precomputed 3D Sobel normals mapped across sphere curvature packed into RGBA8 cubemap DDS textures.
   - Dynamic water surface detection and shading.
-- **Multi-Threaded Texture Pipeline**: Parallel Rayon downsampling that merges multi-gigabyte GeoTIFF tiles into optimized $8192 \times 4096$ DDS textures in seconds.
+- **Multi-Threaded Texture Pipeline**: Parallel Rayon downsampling that merges multi-gigabyte GeoTIFF tiles and projects them into optimized 6-face cubemap DDS textures with mipmaps in seconds.
 
 ---
 
@@ -46,12 +46,12 @@ High-resolution source textures are not bundled in the repository:
 
 ### 2. Convert Textures to DDS
 
-Run the offline converter to resample textures to $8192 \times 4096$ and precompute 3D surface normals:
+Run the offline converter to resample textures into 6-face cubemaps ($2048 \times 2048$ per face) and precompute 3D surface normals:
 
 ```bash
 cargo run --release --bin convert_textures
 ```
-*Generated textures are saved to `res/earth/diffuse.dds` and `res/earth/elevation.dds`.*
+*Generated textures are saved to `res/earth/diffuse_cube_2048x2048.dds` and `res/earth/elevation_cube_2048x2048.dds`.*
 
 ### 3. Run the Application
 

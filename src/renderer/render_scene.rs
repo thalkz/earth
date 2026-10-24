@@ -175,12 +175,12 @@ fn create_elevation_texture(
     sampler: &Sampler,
     image: &ImageAsset,
 ) -> BindGroup {
+    let ImageAsset::Cubemap { width, .. } = image;
     let mip_levels: Vec<&[u8]> = image.mip_levels().collect();
-    let elevation_texture = Texture::create_2d(
+    let elevation_texture = Texture::create_cube(
         device,
         queue,
-        image.width,
-        image.height,
+        *width,
         TextureFormat::Rgba8Unorm,
         &mip_levels,
         Some("elevation"),
@@ -248,4 +248,3 @@ impl From<Light> for LightUniform {
         Self::new(value.direction.to_array(), value.color.to_array())
     }
 }
-

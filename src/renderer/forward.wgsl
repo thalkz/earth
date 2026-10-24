@@ -1,11 +1,10 @@
 struct VertexInput {
     @location(0) position: vec3<f32>,
-    @location(1) tex_coords: vec2<f32>,
 };
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
-    @location(0) tex_coords: vec2<f32>,
+    @location(0) sphere_dir: vec3<f32>,
     @location(1) world_position: vec3<f32>,
 };
 
@@ -26,7 +25,7 @@ struct Light {
 var<uniform> light: Light;
 
 @group(2) @binding(0)
-var texture_elevation: texture_2d<f32>;
+var texture_elevation: texture_cube<f32>;
 @group(2) @binding(1)
 var sampler_elevation: sampler;
 
@@ -35,7 +34,6 @@ fn vs_main(
     vertex: VertexInput,
 ) -> VertexOutput {
     let unit_position = normalize(vertex.position);
-    let uv = vertex.tex_coords;
     let camera_dist = length(camera.view_pos.xyz - unit_position);
 
     let min_dist = 1.0;
@@ -43,7 +41,7 @@ fn vs_main(
     let t = clamp((camera_dist - min_dist) / (max_dist - min_dist), 0.0, 1.0);
     let target_lod = t * 6.0;
 
-    let elevation_sample = textureSampleLevel(texture_elevation, sampler_elevation, vertex.tex_coords, target_lod);
+    let elevation_sample = textureSampleLevel(texture_elevation, sampler_elevation, unit_position, target_lod);
 
     let elevation = elevation_sample.a; // alpha channel is elevation
     let height_scale = 0.03;
@@ -52,19 +50,20 @@ fn vs_main(
     var out: VertexOutput;
     out.clip_position = camera.view_proj * vec4<f32>(displaced_position, 1.0);
     out.world_position = displaced_position;
-    out.tex_coords = vertex.tex_coords;
+    out.sphere_dir = unit_position;
     return out;
 }
 
 @group(3) @binding(0)
-var texture_diffuse: texture_2d<f32>;
+var texture_diffuse: texture_cube<f32>;
 @group(3) @binding(1)
 var sampler_diffuse: sampler;
 
 @fragment
 fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
-    let diffuse_sample = textureSample(texture_diffuse, sampler_diffuse, vertex.tex_coords);
-    let elevation_sample = textureSampleLevel(texture_elevation, sampler_elevation, vertex.tex_coords, 0.0);
+    let dir = normalize(vertex.sphere_dir);
+    let diffuse_sample = textureSample(texture_diffuse, sampler_diffuse, dir);
+    let elevation_sample = textureSample(texture_elevation, sampler_elevation, dir);
 
     let is_water = elevation_sample.a <= 0.001;
     var object_color = diffuse_sample;
