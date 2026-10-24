@@ -29,7 +29,7 @@ impl GpuContext {
         let (device, queue) = adapter
             .request_device(&DeviceDescriptor {
                 label: Some("Primary Device"),
-                required_features: wgpu::Features::TEXTURE_FORMAT_16BIT_NORM, // used for elevation sampling
+                required_features: wgpu::Features::empty(),
                 experimental_features: ExperimentalFeatures::disabled(),
                 required_limits: Limits::default(),
                 memory_hints: Default::default(),
