@@ -31,14 +31,20 @@ impl Scene {
         let light = Light::new(glam::vec3(2.0, 0.0, 2.0), glam::vec3(1.0, 1.0, 1.0));
         let gizmos = Gizmos::new();
 
-        const CUBE_FACE_SIZE: u32 = 2048;
+        const CUBE_FACE_SIZE: u32 = 4096;
         const EARTH_FACE_SUBDIVISION: usize = 4;
         const SUBDIVISION_RESOLUTION: usize = 256;
         let earth = Earth::load(
             SUBDIVISION_RESOLUTION,
             EARTH_FACE_SUBDIVISION,
-            &format!("earth/elevation_cube_{}x{}.dds", CUBE_FACE_SIZE, CUBE_FACE_SIZE),
-            &format!("earth/diffuse_cube_{}x{}.dds", CUBE_FACE_SIZE, CUBE_FACE_SIZE),
+            &format!(
+                "earth/elevation_cube_{}x{}.dds",
+                CUBE_FACE_SIZE, CUBE_FACE_SIZE
+            ),
+            &format!(
+                "earth/diffuse_cube_{}x{}.dds",
+                CUBE_FACE_SIZE, CUBE_FACE_SIZE
+            ),
         )?;
 
         Ok(Self {

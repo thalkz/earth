@@ -565,7 +565,7 @@ fn convert_image_to_rgba8(input_path: &Path, output_dds: &Path) -> anyhow::Resul
     Ok(())
 }
 
-const CUBE_FACE_SIZE: u32 = 2048;
+const CUBE_FACE_SIZE: u32 = 4096;
 
 fn main() -> anyhow::Result<()> {
     let elevation_input = Path::new("res/in/gebco_2026_geotiff");
