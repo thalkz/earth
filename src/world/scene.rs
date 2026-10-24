@@ -33,7 +33,7 @@ impl Scene {
 
         const CUBE_FACE_SIZE: u32 = 4096;
         const EARTH_FACE_SUBDIVISION: usize = 4;
-        const SUBDIVISION_RESOLUTION: usize = 256;
+        const SUBDIVISION_RESOLUTION: usize = 512;
         let earth = Earth::load(
             SUBDIVISION_RESOLUTION,
             EARTH_FACE_SUBDIVISION,
