@@ -66,11 +66,12 @@ fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
     let diffuse_sample = textureSample(texture_diffuse, sampler_diffuse, dir);
     let elevation_sample = textureSample(texture_elevation, sampler_elevation, dir);
 
-    let is_water = elevation_sample.a <= 0.001;
-    var object_color = diffuse_sample;
-    if (is_water) {
-        object_color = vec4<f32>(0.0, 0.1, 0.6, 1.0);
-    }
+    // Elevation alpha is 0.0 for water and >= 1/255 (~0.00392) for land.
+    // Smoothstep across this 1-texel bilinear transition anti-aliases the coastline.
+    let water_factor = 1.0 - smoothstep(0.0, 0.0039, elevation_sample.a);
+
+    let ocean_color = vec3<f32>(0.0, 0.1, 0.6);
+    let object_color = mix(diffuse_sample.rgb, ocean_color, water_factor);
 
     let ambient_strength = 0.2;
     let ambient_color = light.color * ambient_strength;
@@ -80,9 +81,9 @@ fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
     let diffuse_strength = max(dot(normal, light_dir), 0.0);
     let diffuse_color = light.color * diffuse_strength;
 
-    // Specular lighting (sun glint on water only)
+    // Specular lighting (sun glint on water only, smoothly faded at coastlines)
     var specular_color = vec3<f32>(0.0, 0.0, 0.0);
-    if (is_water && diffuse_strength > 0.0) {
+    if (water_factor > 0.0 && diffuse_strength > 0.0) {
         let view_dir = normalize(camera.view_pos.xyz - vertex.world_position);
         let half_dir = normalize(light_dir + view_dir);
         let spec_angle = max(dot(normal, half_dir), 0.0);
@@ -90,10 +91,10 @@ fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
         let specular_strength = 0.8;
         let specular_factor = pow(spec_angle, shininess);
         let terminator_fade = smoothstep(0.0, 0.05, diffuse_strength);
-        specular_color = light.color * (specular_factor * specular_strength * terminator_fade);
+        specular_color = light.color * (specular_factor * specular_strength * terminator_fade * water_factor);
     }
 
-    let result = (ambient_color + diffuse_color) * object_color.xyz + specular_color;
+    let result = (ambient_color + diffuse_color) * object_color + specular_color;
 
-    return vec4<f32>(result, object_color.a);
+    return vec4<f32>(result, diffuse_sample.a);
 }
