@@ -20,9 +20,9 @@ impl Earth {
         elevation_filename: &str,
         diffuse_filename: &str,
     ) -> anyhow::Result<Earth> {
-        assert!(resolution >= 2, "resolution must be at least 2"); // TODO return an error instead
-        assert!(subdivisions >= 1, "subdivisions must be at least 1");
-        assert!(subdivisions % 2 == 0, "subdivisions must be even");
+        anyhow::ensure!(resolution >= 2, "resolution must be at least 2"); // TODO return an error instead
+        anyhow::ensure!(subdivisions >= 1, "subdivisions must be at least 1");
+        anyhow::ensure!(subdivisions % 2 == 0, "subdivisions must be even");
 
         let (elevation, (meshes, materials)) = rayon::join(
             || create_elevation(elevation_filename),
