@@ -52,7 +52,8 @@ impl Texture {
             view_formats: &[],
         });
 
-        let bytes_per_pixel = format.block_copy_size(None).unwrap_or(4);
+        let (block_w, block_h) = format.block_dimensions();
+        let block_size = format.block_copy_size(None).unwrap_or(4);
 
         for face in 0..6 {
             let mut mip_w = face_size;
@@ -65,6 +66,8 @@ impl Texture {
                     height: mip_h,
                     depth_or_array_layers: 1,
                 };
+                let blocks_x = (mip_w + block_w - 1) / block_w;
+                let blocks_y = (mip_h + block_h - 1) / block_h;
                 queue.write_texture(
                     TexelCopyTextureInfo {
                         aspect: TextureAspect::All,
@@ -79,8 +82,8 @@ impl Texture {
                     data.as_ref(),
                     TexelCopyBufferLayout {
                         offset: 0,
-                        bytes_per_row: Some(bytes_per_pixel * mip_w),
-                        rows_per_image: Some(mip_h),
+                        bytes_per_row: Some(blocks_x * block_size),
+                        rows_per_image: Some(blocks_y),
                     },
                     mip_size,
                 );

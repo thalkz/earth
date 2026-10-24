@@ -9,6 +9,7 @@ pub const DDSD_WIDTH: u32 = 0x4;
 pub const DDSD_PITCH: u32 = 0x8;
 pub const DDSD_PIXELFORMAT: u32 = 0x1000;
 pub const DDSD_MIPMAPCOUNT: u32 = 0x20000;
+pub const DDSD_LINEARSIZE: u32 = 0x80000;
 
 pub const DDPF_ALPHAPIXELS: u32 = 0x1;
 pub const DDPF_FOURCC: u32 = 0x4;
@@ -100,6 +101,43 @@ impl DdsHeader {
             reserved2: 0,
         }
     }
+
+    pub fn new_bc1_cubemap(face_size: u32, mipmap_count: u32) -> Self {
+        let mut flags = DDSD_CAPS | DDSD_HEIGHT | DDSD_WIDTH | DDSD_PIXELFORMAT | DDSD_LINEARSIZE;
+        let mut caps = DDSCAPS_TEXTURE | DDSCAPS_COMPLEX;
+        if mipmap_count > 1 {
+            flags |= DDSD_MIPMAPCOUNT;
+            caps |= DDSCAPS_MIPMAP;
+        }
+        let blocks = ((face_size + 3) / 4).max(1);
+        let linear_size = blocks * blocks * 8;
+
+        Self {
+            size: 124,
+            flags,
+            height: face_size,
+            width: face_size,
+            pitch_or_linear_size: linear_size,
+            depth: 1,
+            mipmap_count,
+            reserved1: [0; 11],
+            pixel_format: DdsPixelFormat {
+                size: 32,
+                flags: DDPF_FOURCC,
+                four_cc: u32::from_le_bytes(*b"DXT1"),
+                rgb_bit_count: 0,
+                r_bit_mask: 0,
+                g_bit_mask: 0,
+                b_bit_mask: 0,
+                a_bit_mask: 0,
+            },
+            caps,
+            caps2: DDSCAPS2_CUBEMAP_ALLFACES,
+            caps3: 0,
+            caps4: 0,
+            reserved2: 0,
+        }
+    }
 }
 
 #[repr(C)]
@@ -131,19 +169,36 @@ pub fn parse_dds(mut data: Vec<u8>) -> anyhow::Result<ImageAsset> {
     let pf = header.pixel_format;
 
     let mut header_size = 128;
-    let is_bgra = if pf.flags & DDPF_FOURCC != 0 && &pf.four_cc.to_le_bytes() == b"DX10" {
-        if data.len() < 148 {
-            anyhow::bail!("DDS DX10 header truncated");
+    let mut is_bgra = false;
+    let format = if pf.flags & DDPF_FOURCC != 0 {
+        if &pf.four_cc.to_le_bytes() == b"DXT1" {
+            wgpu::TextureFormat::Bc1RgbaUnormSrgb
+        } else if &pf.four_cc.to_le_bytes() == b"DX10" {
+            if data.len() < 148 {
+                anyhow::bail!("DDS DX10 header truncated");
+            }
+            let dxt10: DdsHeaderDxt10 = *bytemuck::from_bytes(&data[128..148]);
+            header_size = 148;
+            match dxt10.dxgi_format {
+                87 => {
+                    is_bgra = true;
+                    wgpu::TextureFormat::Rgba8Unorm
+                }
+                98 | 99 => wgpu::TextureFormat::Bc7RgbaUnormSrgb,
+                other => anyhow::bail!("Unsupported DX10 format: {}", other),
+            }
+        } else {
+            anyhow::bail!(
+                "Unsupported FourCC: {:?}",
+                std::str::from_utf8(&pf.four_cc.to_le_bytes())
+            );
         }
-        let dxt10: DdsHeaderDxt10 = *bytemuck::from_bytes(&data[128..148]);
-        header_size = 148;
-        // DXGI_FORMAT_B8G8R8A8_UNORM = 87
-        dxt10.dxgi_format == 87
     } else if pf.flags & DDPF_RGB != 0 {
         if pf.rgb_bit_count != 32 {
             anyhow::bail!("Unsupported DDS bit count: {}", pf.rgb_bit_count);
         }
-        pf.r_bit_mask == 0x00FF_0000 && pf.b_bit_mask == 0x0000_00FF
+        is_bgra = pf.r_bit_mask == 0x00FF_0000 && pf.b_bit_mask == 0x0000_00FF;
+        wgpu::TextureFormat::Rgba8Unorm
     } else {
         anyhow::bail!("Unsupported DDS pixel format flags: {:#x}", pf.flags);
     };
@@ -169,7 +224,17 @@ pub fn parse_dds(mut data: Vec<u8>) -> anyhow::Result<ImageAsset> {
     for _face in 0..FACE_COUNT {
         let mut cur_size = width;
         for _ in 0..mip_count {
-            let level_len = (cur_size as usize) * (cur_size as usize) * 4;
+            let level_len = match format {
+                wgpu::TextureFormat::Bc1RgbaUnorm | wgpu::TextureFormat::Bc1RgbaUnormSrgb => {
+                    let blocks = ((cur_size + 3) / 4).max(1) as usize;
+                    blocks * blocks * 8
+                }
+                wgpu::TextureFormat::Bc7RgbaUnorm | wgpu::TextureFormat::Bc7RgbaUnormSrgb => {
+                    let blocks = ((cur_size + 3) / 4).max(1) as usize;
+                    blocks * blocks * 16
+                }
+                _ => (cur_size as usize) * (cur_size as usize) * 4,
+            };
             let next_offset = current_offset + level_len;
             mip_offsets.push(current_offset..next_offset);
             current_offset = next_offset;
@@ -202,7 +267,33 @@ pub fn parse_dds(mut data: Vec<u8>) -> anyhow::Result<ImageAsset> {
     Ok(ImageAsset::Cubemap {
         width,
         height,
+        format,
         data,
         mip_offsets,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn test_parse_bc1_cubemap() {
+        let path = "res/earth/diffuse_cube_4096x4096.dds";
+        if let Ok(bytes) = fs::read(path) {
+            let asset = parse_dds(bytes).expect("Should parse BC1 DDS");
+            let ImageAsset::Cubemap {
+                width,
+                height,
+                format,
+                mip_offsets,
+                ..
+            } = asset;
+            assert_eq!(width, 4096);
+            assert_eq!(height, 4096);
+            assert_eq!(format, wgpu::TextureFormat::Bc1RgbaUnormSrgb);
+            assert_eq!(mip_offsets.len(), 6 * 8); // 6 faces * 8 mips
+        }
+    }
 }

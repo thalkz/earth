@@ -45,6 +45,7 @@ pub enum ImageAsset {
         width: u32,
         #[allow(dead_code)]
         height: u32,
+        format: wgpu::TextureFormat,
         data: Vec<u8>,
         mip_offsets: Vec<Range<usize>>,
     },

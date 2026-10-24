@@ -26,10 +26,15 @@ impl GpuContext {
             })
             .await?;
 
+        let mut required_features = wgpu::Features::empty();
+        if adapter.features().contains(wgpu::Features::TEXTURE_COMPRESSION_BC) {
+            required_features |= wgpu::Features::TEXTURE_COMPRESSION_BC;
+        }
+
         let (device, queue) = adapter
             .request_device(&DeviceDescriptor {
                 label: Some("Primary Device"),
-                required_features: wgpu::Features::empty(),
+                required_features,
                 experimental_features: ExperimentalFeatures::disabled(),
                 required_limits: Limits::default(),
                 memory_hints: Default::default(),

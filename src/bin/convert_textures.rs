@@ -23,6 +23,138 @@ fn write_dds_cubemap<P: AsRef<Path>>(
     Ok(())
 }
 
+fn write_dds_bc1_cubemap<P: AsRef<Path>>(
+    path: P,
+    face_size: u32,
+    mip_levels_all_faces: &[Vec<u8>],
+) -> std::io::Result<()> {
+    let mip_count_per_face = (mip_levels_all_faces.len() / 6) as u32;
+    let header = DdsHeader::new_bc1_cubemap(face_size, mip_count_per_face);
+    let mut file = File::create(path)?;
+    file.write_all(&DDS_MAGIC.to_le_bytes())?;
+    file.write_all(bytemuck::bytes_of(&header))?;
+    for level in mip_levels_all_faces {
+        file.write_all(level)?;
+    }
+    Ok(())
+}
+
+fn to_rgb565(r: u8, g: u8, b: u8) -> u16 {
+    let r5 = (r as u16 * 31 + 127) / 255;
+    let g6 = (g as u16 * 63 + 127) / 255;
+    let b5 = (b as u16 * 31 + 127) / 255;
+    (r5 << 11) | (g6 << 5) | b5
+}
+
+fn from_rgb565(c: u16) -> [i32; 3] {
+    let r5 = ((c >> 11) & 31) as i32;
+    let g6 = ((c >> 5) & 63) as i32;
+    let b5 = (c & 31) as i32;
+    [
+        (r5 * 255 + 15) / 31,
+        (g6 * 255 + 31) / 63,
+        (b5 * 255 + 15) / 31,
+    ]
+}
+
+fn encode_bc1_block(block_pixels: &[[u8; 3]; 16]) -> [u8; 8] {
+    // Find the pair of pixels with maximum perceptual distance
+    let mut max_dist = -1i32;
+    let mut p_min = block_pixels[0];
+    let mut p_max = block_pixels[0];
+
+    for i in 0..16 {
+        for j in (i + 1)..16 {
+            let dr = block_pixels[i][0] as i32 - block_pixels[j][0] as i32;
+            let dg = block_pixels[i][1] as i32 - block_pixels[j][1] as i32;
+            let db = block_pixels[i][2] as i32 - block_pixels[j][2] as i32;
+            let dist = 3 * dr * dr + 4 * dg * dg + 2 * db * db;
+            if dist > max_dist {
+                max_dist = dist;
+                p_min = block_pixels[i];
+                p_max = block_pixels[j];
+            }
+        }
+    }
+
+    let mut c0_565 = to_rgb565(p_max[0], p_max[1], p_max[2]);
+    let mut c1_565 = to_rgb565(p_min[0], p_min[1], p_min[2]);
+
+    if c0_565 < c1_565 {
+        std::mem::swap(&mut c0_565, &mut c1_565);
+    }
+
+    let (pal, num_colors) = if c0_565 > c1_565 {
+        let c0 = from_rgb565(c0_565);
+        let c1 = from_rgb565(c1_565);
+        let c2 = [
+            (2 * c0[0] + c1[0] + 1) / 3,
+            (2 * c0[1] + c1[1] + 1) / 3,
+            (2 * c0[2] + c1[2] + 1) / 3,
+        ];
+        let c3 = [
+            (c0[0] + 2 * c1[0] + 1) / 3,
+            (c0[1] + 2 * c1[1] + 1) / 3,
+            (c0[2] + 2 * c1[2] + 1) / 3,
+        ];
+        ([c0, c1, c2, c3], 4)
+    } else {
+        let c0 = from_rgb565(c0_565);
+        ([c0, c0, c0, [0, 0, 0]], 1)
+    };
+
+    let mut indices: u32 = 0;
+    for (i, p) in block_pixels.iter().enumerate() {
+        let mut best_dist = i32::MAX;
+        let mut best_idx = 0u32;
+        let p_i = [p[0] as i32, p[1] as i32, p[2] as i32];
+
+        for k in 0..num_colors {
+            let dr = p_i[0] - pal[k][0];
+            let dg = p_i[1] - pal[k][1];
+            let db = p_i[2] - pal[k][2];
+            let dist = 3 * dr * dr + 4 * dg * dg + 2 * db * db;
+            if dist < best_dist {
+                best_dist = dist;
+                best_idx = k as u32;
+            }
+        }
+        indices |= best_idx << (i * 2);
+    }
+
+    let mut out = [0u8; 8];
+    out[0..2].copy_from_slice(&c0_565.to_le_bytes());
+    out[2..4].copy_from_slice(&c1_565.to_le_bytes());
+    out[4..8].copy_from_slice(&indices.to_le_bytes());
+    out
+}
+
+fn compress_rgba8_to_bc1(rgba: &[u8], width: u32, height: u32) -> Vec<u8> {
+    let blocks_x = ((width + 3) / 4).max(1) as usize;
+    let blocks_y = ((height + 3) / 4).max(1) as usize;
+    let mut out = vec![0u8; blocks_x * blocks_y * 8];
+
+    out.par_chunks_exact_mut(blocks_x * 8)
+        .enumerate()
+        .for_each(|(by, row)| {
+            for bx in 0..blocks_x {
+                let mut block = [[0u8; 3]; 16];
+                for py in 0..4 {
+                    let y = (by * 4 + py).min(height as usize - 1);
+                    for px in 0..4 {
+                        let x = (bx * 4 + px).min(width as usize - 1);
+                        let offset = (y * width as usize + x) * 4;
+                        block[py * 4 + px] = [rgba[offset], rgba[offset + 1], rgba[offset + 2]];
+                    }
+                }
+                let block_bytes = encode_bc1_block(&block);
+                row[bx * 8..bx * 8 + 8].copy_from_slice(&block_bytes);
+            }
+        });
+
+    out
+}
+
 fn cube_uv_to_direction(face: usize, u: f32, v: f32) -> Vec3 {
     // Face convention matching standard DirectX/wgpu Cubemap:
     // 0: +X, 1: -X, 2: +Y, 3: -Y, 4: +Z, 5: -Z
@@ -415,8 +547,8 @@ fn convert_gebco_to_normal_elevation_rgba8(
     Ok(())
 }
 
-fn convert_image_to_rgba8(input_path: &Path, output_dds: &Path) -> anyhow::Result<()> {
-    println!("Converting {:?} to RGBA8 Cubemap DDS...", input_path);
+fn convert_image_to_bc1(input_path: &Path, output_dds: &Path) -> anyhow::Result<()> {
+    println!("Converting {:?} to BC1 Cubemap DDS...", input_path);
     let start = Instant::now();
 
     let mut reader = image::io::Reader::open(input_path)?;
@@ -478,15 +610,22 @@ fn convert_image_to_rgba8(input_path: &Path, output_dds: &Path) -> anyhow::Resul
             });
 
         let face_mips = generate_mipmaps_diffuse(face_bytes, face_size, face_size);
-        all_cubemap_mips.extend(face_mips);
+        let mut cur_w = face_size;
+        let mut cur_h = face_size;
+        for mip in face_mips {
+            let bc1_mip = compress_rgba8_to_bc1(&mip, cur_w, cur_h);
+            all_cubemap_mips.push(bc1_mip);
+            cur_w = (cur_w / 2).max(1);
+            cur_h = (cur_h / 2).max(1);
+        }
     }
 
     println!(
-        "Diffuse cubemap generated in {:?}! Writing DDS to {:?}...",
+        "Diffuse cubemap generated in {:?}! Writing BC1 DDS to {:?}...",
         cube_start.elapsed(),
         output_dds
     );
-    write_dds_cubemap(output_dds, face_size, &all_cubemap_mips)?;
+    write_dds_bc1_cubemap(output_dds, face_size, &all_cubemap_mips)?;
 
     let total_bytes: usize = all_cubemap_mips.iter().map(|m| m.len()).sum();
     println!(
@@ -511,8 +650,13 @@ fn main() -> anyhow::Result<()> {
     );
     let elevation_output = Path::new(elevation_output);
 
-    if elevation_input.exists() {
+    if elevation_input.exists() && !elevation_output.exists() {
         convert_gebco_to_normal_elevation_rgba8(elevation_input, elevation_output)?;
+    } else if elevation_output.exists() {
+        println!(
+            "{} already exists, skipping elevation conversion",
+            elevation_output.to_str().unwrap()
+        );
     } else {
         println!("{} is missing", elevation_input.to_str().unwrap());
     }
@@ -525,7 +669,7 @@ fn main() -> anyhow::Result<()> {
     let diffuse_output = Path::new(&diffuse_output);
 
     if diffuse_input.exists() {
-        convert_image_to_rgba8(diffuse_input, diffuse_output)?;
+        convert_image_to_bc1(diffuse_input, diffuse_output)?;
     } else {
         println!("{} is missing", diffuse_input.to_str().unwrap());
     }

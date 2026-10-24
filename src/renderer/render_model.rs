@@ -6,8 +6,8 @@ use std::ops::Range;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindingResource, Buffer,
-    BufferAddress, BufferUsages, Device, Queue, Sampler, TextureFormat, VertexAttribute,
-    VertexBufferLayout, VertexFormat, VertexStepMode,
+    BufferAddress, BufferUsages, Device, Queue, Sampler, VertexAttribute, VertexBufferLayout,
+    VertexFormat, VertexStepMode,
 };
 
 pub struct RenderModel {
@@ -48,13 +48,13 @@ impl RenderModel {
             .iter()
             .map(|material| {
                 let image = &material.diffuse;
-                let ImageAsset::Cubemap { width, .. } = image;
+                let ImageAsset::Cubemap { width, format, .. } = image;
                 let mip_levels: Vec<&[u8]> = image.mip_levels().collect();
                 let texture = Texture::create_cube(
                     device,
                     queue,
                     *width,
-                    TextureFormat::Rgba8UnormSrgb,
+                    *format,
                     &mip_levels,
                     Some(&material.name),
                 );

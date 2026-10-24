@@ -8,7 +8,7 @@ use glam::Mat4;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindingResource, Buffer,
-    BufferUsages, Device, Queue, Sampler, TextureFormat,
+    BufferUsages, Device, Queue, Sampler,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -175,13 +175,13 @@ fn create_elevation_texture(
     sampler: &Sampler,
     image: &ImageAsset,
 ) -> BindGroup {
-    let ImageAsset::Cubemap { width, .. } = image;
+    let ImageAsset::Cubemap { width, format, .. } = image;
     let mip_levels: Vec<&[u8]> = image.mip_levels().collect();
     let elevation_texture = Texture::create_cube(
         device,
         queue,
         *width,
-        TextureFormat::Rgba8Unorm,
+        *format,
         &mip_levels,
         Some("elevation"),
     );
