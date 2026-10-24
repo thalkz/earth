@@ -41,7 +41,7 @@ impl FramerateLogger {
                 self.frame_time_ms = (elapsed_secs * 1000.0) / self.frame_count as f32;
             }
             if self.enabled {
-                println!("FPS: {:.1} ({:.2} ms)", self.fps, self.frame_time_ms);
+                log::info!("FPS: {:.1} ({:.2} ms)", self.fps, self.frame_time_ms);
             }
             self.frame_count = 0;
             self.last_report = now;

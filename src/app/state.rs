@@ -18,9 +18,8 @@ pub struct State {
 impl State {
     pub async fn new(window: Arc<Window>) -> anyhow::Result<Self> {
         let start = Instant::now();
-        println!("Started");
         let (gpu, surface) = GpuContext::init_window(window.clone()).await?;
-        println!("Window initialized at {}ms", start.elapsed().as_millis());
+        log::info!("Window initialized at {}ms", start.elapsed().as_millis());
 
         let renderer = Renderer::new(&gpu.device, surface.config.format);
 
@@ -31,7 +30,7 @@ impl State {
         };
 
         let scene = Scene::load(scene_config)?;
-        println!("Scene loaded at {}ms", start.elapsed().as_millis());
+        log::info!("Scene loaded at {}ms", start.elapsed().as_millis());
 
         let render_scene = RenderScene::new(
             &gpu.device,
@@ -39,7 +38,7 @@ impl State {
             &scene,
             &renderer.bind_group_layouts,
         );
-        println!("RenderScene created at {}ms", start.elapsed().as_millis());
+        log::info!("RenderScene created at {}ms", start.elapsed().as_millis());
 
         Ok(Self {
             window,
