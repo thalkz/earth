@@ -3,9 +3,20 @@ use rayon::prelude::*;
 
 pub const DDS_MAGIC: u32 = 0x2053_4444; // "DDS " in little-endian
 
+pub const DDSD_CAPS: u32 = 0x1;
+pub const DDSD_HEIGHT: u32 = 0x2;
+pub const DDSD_WIDTH: u32 = 0x4;
+pub const DDSD_PITCH: u32 = 0x8;
+pub const DDSD_PIXELFORMAT: u32 = 0x1000;
 pub const DDSD_MIPMAPCOUNT: u32 = 0x20000;
+
+pub const DDPF_ALPHAPIXELS: u32 = 0x1;
 pub const DDPF_FOURCC: u32 = 0x4;
 pub const DDPF_RGB: u32 = 0x40;
+
+pub const DDSCAPS_COMPLEX: u32 = 0x8;
+pub const DDSCAPS_TEXTURE: u32 = 0x1000;
+pub const DDSCAPS_MIPMAP: u32 = 0x400000;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, bytemuck::Pod, bytemuck::Zeroable)]
@@ -37,6 +48,43 @@ pub struct DdsHeader {
     pub caps3: u32,
     pub caps4: u32,
     pub reserved2: u32,
+}
+
+impl DdsHeader {
+    pub fn new_rgba8(width: u32, height: u32, mipmap_count: u32) -> Self {
+        let mut flags = DDSD_CAPS | DDSD_HEIGHT | DDSD_WIDTH | DDSD_PITCH | DDSD_PIXELFORMAT;
+        let mut caps = DDSCAPS_TEXTURE;
+        if mipmap_count > 1 {
+            flags |= DDSD_MIPMAPCOUNT;
+            caps |= DDSCAPS_COMPLEX | DDSCAPS_MIPMAP;
+        }
+
+        Self {
+            size: 124,
+            flags,
+            height,
+            width,
+            pitch_or_linear_size: width * 4,
+            depth: 1,
+            mipmap_count,
+            reserved1: [0; 11],
+            pixel_format: DdsPixelFormat {
+                size: 32,
+                flags: DDPF_RGB | DDPF_ALPHAPIXELS,
+                four_cc: 0,
+                rgb_bit_count: 32,
+                r_bit_mask: 0x0000_00FF,
+                g_bit_mask: 0x0000_FF00,
+                b_bit_mask: 0x00FF_0000,
+                a_bit_mask: 0xFF00_0000,
+            },
+            caps,
+            caps2: 0,
+            caps3: 0,
+            caps4: 0,
+            reserved2: 0,
+        }
+    }
 }
 
 #[repr(C)]

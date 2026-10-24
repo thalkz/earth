@@ -6,3 +6,4 @@ mod renderer;
 mod world;
 
 pub use app::run;
+pub use assets::{DDS_MAGIC, DdsHeader};

@@ -1,3 +1,4 @@
+use earth::{DDS_MAGIC, DdsHeader};
 use glam::Vec3;
 use rayon::prelude::*;
 use std::f32::consts::PI;
@@ -5,91 +6,6 @@ use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 use std::time::Instant;
-
-const DDS_MAGIC: u32 = 0x2053_4444; // "DDS " in little-endian
-
-const DDSD_CAPS: u32 = 0x1;
-const DDSD_HEIGHT: u32 = 0x2;
-const DDSD_WIDTH: u32 = 0x4;
-const DDSD_PITCH: u32 = 0x8;
-const DDSD_PIXELFORMAT: u32 = 0x1000;
-const DDSD_MIPMAPCOUNT: u32 = 0x20000;
-
-const DDPF_ALPHAPIXELS: u32 = 0x1;
-const DDPF_RGB: u32 = 0x40;
-
-const DDSCAPS_COMPLEX: u32 = 0x8;
-const DDSCAPS_TEXTURE: u32 = 0x1000;
-const DDSCAPS_MIPMAP: u32 = 0x400000;
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, bytemuck::Pod, bytemuck::Zeroable)]
-struct DdsPixelFormat {
-    size: u32,
-    flags: u32,
-    four_cc: u32,
-    rgb_bit_count: u32,
-    r_bit_mask: u32,
-    g_bit_mask: u32,
-    b_bit_mask: u32,
-    a_bit_mask: u32,
-}
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, bytemuck::Pod, bytemuck::Zeroable)]
-struct DdsHeader {
-    size: u32,
-    flags: u32,
-    height: u32,
-    width: u32,
-    pitch_or_linear_size: u32,
-    depth: u32,
-    mipmap_count: u32,
-    reserved1: [u32; 11],
-    pixel_format: DdsPixelFormat,
-    caps: u32,
-    caps2: u32,
-    caps3: u32,
-    caps4: u32,
-    reserved2: u32,
-}
-
-impl DdsHeader {
-    fn new_rgba8(width: u32, height: u32, mipmap_count: u32) -> Self {
-        let mut flags = DDSD_CAPS | DDSD_HEIGHT | DDSD_WIDTH | DDSD_PITCH | DDSD_PIXELFORMAT;
-        let mut caps = DDSCAPS_TEXTURE;
-        if mipmap_count > 1 {
-            flags |= DDSD_MIPMAPCOUNT;
-            caps |= DDSCAPS_COMPLEX | DDSCAPS_MIPMAP;
-        }
-
-        Self {
-            size: 124,
-            flags,
-            height,
-            width,
-            pitch_or_linear_size: width * 4,
-            depth: 1,
-            mipmap_count,
-            reserved1: [0; 11],
-            pixel_format: DdsPixelFormat {
-                size: 32,
-                flags: DDPF_RGB | DDPF_ALPHAPIXELS,
-                four_cc: 0,
-                rgb_bit_count: 32,
-                r_bit_mask: 0x0000_00FF,
-                g_bit_mask: 0x0000_FF00,
-                b_bit_mask: 0x00FF_0000,
-                a_bit_mask: 0xFF00_0000,
-            },
-            caps,
-            caps2: 0,
-            caps3: 0,
-            caps4: 0,
-            reserved2: 0,
-        }
-    }
-}
 
 fn write_dds_file<P: AsRef<Path>>(
     path: P,
@@ -626,4 +542,3 @@ fn main() -> anyhow::Result<()> {
 
     Ok(())
 }
-
