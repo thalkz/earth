@@ -13,11 +13,11 @@ use wgpu::{
 pub struct RenderModel {
     pub meshes: Vec<RenderMesh>,
     pub materials: Vec<RenderMaterial>,
+    pub index_buffer: Buffer,
 }
 
 pub struct RenderMesh {
     pub vertex_buffer: Buffer,
-    pub index_buffer: Buffer,
     pub lod_ranges: Vec<Range<u32>>,
     pub material_index: usize,
     pub bounding_sphere: BoundingSphere,
@@ -81,6 +81,19 @@ impl RenderModel {
             })
             .collect();
 
+        let index_buffer = {
+            let sample_indices = model
+                .meshes
+                .first()
+                .map(|m| m.indices.as_slice())
+                .unwrap_or(&[]);
+            device.create_buffer_init(&BufferInitDescriptor {
+                label: Some("Shared Earth Mesh Index Buffer"),
+                contents: bytemuck::cast_slice(sample_indices),
+                usage: BufferUsages::INDEX,
+            })
+        };
+
         let meshes = model
             .meshes
             .iter()
@@ -89,11 +102,6 @@ impl RenderModel {
                     label: Some(&format!("{:?} Vertex Buffer", mesh.name)),
                     contents: bytemuck::cast_slice(&mesh.vertices),
                     usage: BufferUsages::VERTEX,
-                });
-                let index_buffer = device.create_buffer_init(&BufferInitDescriptor {
-                    label: Some(&format!("{:?} Index Buffer", mesh.name)),
-                    contents: bytemuck::cast_slice(&mesh.indices),
-                    usage: BufferUsages::INDEX,
                 });
 
                 let mut bounding_sphere = BoundingSphere::from_points(
@@ -110,7 +118,6 @@ impl RenderModel {
 
                 RenderMesh {
                     vertex_buffer,
-                    index_buffer,
                     lod_ranges,
                     material_index: mesh.material_index,
                     bounding_sphere,
@@ -118,7 +125,11 @@ impl RenderModel {
             })
             .collect();
 
-        Self { meshes, materials }
+        Self {
+            meshes,
+            materials,
+            index_buffer,
+        }
     }
 }
 

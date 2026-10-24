@@ -4,6 +4,7 @@ use crate::{
 };
 use glam::{Vec2, Vec3};
 use rayon::prelude::*;
+use std::ops::Range;
 
 #[allow(unused)]
 pub struct Earth {
@@ -61,16 +62,45 @@ fn create_material(filename: &str) -> anyhow::Result<Vec<Material>> {
 }
 
 fn create_meshes(resolution: usize, subdivisions: usize) -> Vec<Mesh> {
+    let (shared_indices, lod_ranges) = generate_patch_indices(resolution);
+
     CUBE_FACE_NORMALS
         .par_iter()
         .flat_map(|&normal| {
+            let shared_indices = &shared_indices;
+            let lod_ranges = &lod_ranges;
             (0..subdivisions).into_par_iter().flat_map(move |part_y| {
                 (0..subdivisions).into_par_iter().map(move |part_x| {
-                    create_face_part(normal, part_x, part_y, subdivisions, resolution, 0)
+                    create_face_part(
+                        normal,
+                        part_x,
+                        part_y,
+                        subdivisions,
+                        resolution,
+                        0,
+                        shared_indices.clone(),
+                        lod_ranges.clone(),
+                    )
                 })
             })
         })
         .collect()
+}
+
+fn generate_patch_indices(resolution: usize) -> (Vec<u32>, Vec<Range<u32>>) {
+    let mut all_indices = Vec::new();
+    let mut lod_ranges = Vec::with_capacity(4);
+
+    // LOD 0 (step 1), LOD 1 (step 2), LOD 2 (step 4), LOD 3 (step 8)
+    for step in [1, 2, 4, 8] {
+        let start = all_indices.len() as u32;
+        let lod_indices = generate_lod_indices(resolution, step);
+        all_indices.extend(lod_indices);
+        let end = all_indices.len() as u32;
+        lod_ranges.push(start..end);
+    }
+
+    (all_indices, lod_ranges)
 }
 
 fn create_face_part(
@@ -80,6 +110,8 @@ fn create_face_part(
     subdivisions: usize,
     resolution: usize,
     material_index: usize,
+    indices: Vec<u32>,
+    lod_ranges: Vec<Range<u32>>,
 ) -> Mesh {
     let axis_u = Vec3::new(normal.y, normal.z, normal.x);
     let axis_v = normal.cross(axis_u);
@@ -109,22 +141,10 @@ fn create_face_part(
         }
     }
 
-    let mut all_indices = Vec::new();
-    let mut lod_ranges = Vec::with_capacity(4);
-
-    // LOD 0 (step 1), LOD 1 (step 2), LOD 2 (step 4), LOD 3 (step 8)
-    for step in [1, 2, 4, 8] {
-        let start = all_indices.len() as u32;
-        let lod_indices = generate_lod_indices(resolution, step);
-        all_indices.extend(lod_indices);
-        let end = all_indices.len() as u32;
-        lod_ranges.push(start..end);
-    }
-
     Mesh::with_lods(
         format!("cube_face_{normal:?}_{part_x}_{part_y}"),
         vertices,
-        all_indices,
+        indices,
         lod_ranges,
         material_index,
     )
