@@ -4,8 +4,8 @@ use glam::Vec3;
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct GizmosVertex {
-    position: Vec3,
-    color: [f32; 4],
+    pub position: Vec3,
+    pub color: [f32; 4],
 }
 
 impl GizmosVertex {

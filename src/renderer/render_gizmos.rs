@@ -1,5 +1,5 @@
 use crate::world::{Gizmos, GizmosVertex};
-use std::mem;
+use std::mem::{offset_of, size_of};
 use wgpu::{
     Buffer, BufferAddress, BufferDescriptor, BufferUsages, Device, Queue, VertexAttribute,
     VertexBufferLayout, VertexFormat, VertexStepMode,
@@ -15,7 +15,7 @@ impl RenderGizmos {
     const INITIAL_CAPACITY: usize = 64;
 
     pub fn new(device: &Device) -> Self {
-        let initial_bytes = (Self::INITIAL_CAPACITY * mem::size_of::<GizmosVertex>()) as u64;
+        let initial_bytes = (Self::INITIAL_CAPACITY * size_of::<GizmosVertex>()) as u64;
         let vertex_buffer = device.create_buffer(&BufferDescriptor {
             label: Some("Gizmos Vertex Buffer"),
             size: initial_bytes,
@@ -37,7 +37,7 @@ impl RenderGizmos {
             return;
         }
 
-        let needed_bytes = (count * mem::size_of::<GizmosVertex>()) as u64;
+        let needed_bytes = (count * size_of::<GizmosVertex>()) as u64;
 
         // Reallocate only if the current GPU buffer cannot fit the new vertices
         if needed_bytes > self.vertex_buffer.size() {
@@ -60,22 +60,24 @@ impl RenderGizmos {
 }
 
 impl GizmosVertex {
+    pub const ATTRIBUTES: [VertexAttribute; 2] = [
+        VertexAttribute {
+            offset: offset_of!(GizmosVertex, position) as BufferAddress,
+            shader_location: 0,
+            format: VertexFormat::Float32x3,
+        },
+        VertexAttribute {
+            offset: offset_of!(GizmosVertex, color) as BufferAddress,
+            shader_location: 1,
+            format: VertexFormat::Float32x4,
+        },
+    ];
+
     pub fn desc() -> VertexBufferLayout<'static> {
         VertexBufferLayout {
-            array_stride: mem::size_of::<GizmosVertex>() as BufferAddress,
+            array_stride: size_of::<GizmosVertex>() as BufferAddress,
             step_mode: VertexStepMode::Vertex,
-            attributes: &[
-                VertexAttribute {
-                    offset: 0,
-                    shader_location: 0,
-                    format: VertexFormat::Float32x3,
-                },
-                VertexAttribute {
-                    offset: mem::size_of::<[f32; 3]>() as BufferAddress,
-                    shader_location: 1,
-                    format: VertexFormat::Float32x4,
-                },
-            ],
+            attributes: &Self::ATTRIBUTES,
         }
     }
 }

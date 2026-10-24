@@ -1,7 +1,7 @@
 use crate::assets::{Model, Vertex};
 use crate::geo::BoundingSphere;
 use crate::gpu::Texture;
-use std::mem;
+use std::mem::{offset_of, size_of};
 use std::ops::Range;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{
@@ -123,22 +123,24 @@ impl RenderModel {
 }
 
 impl Vertex {
+    pub const ATTRIBUTES: [VertexAttribute; 2] = [
+        VertexAttribute {
+            offset: offset_of!(Vertex, position) as BufferAddress,
+            shader_location: 0,
+            format: VertexFormat::Float32x3,
+        },
+        VertexAttribute {
+            offset: offset_of!(Vertex, tex_coords) as BufferAddress,
+            shader_location: 1,
+            format: VertexFormat::Float32x2,
+        },
+    ];
+
     pub fn desc() -> VertexBufferLayout<'static> {
         VertexBufferLayout {
-            array_stride: mem::size_of::<Vertex>() as BufferAddress,
+            array_stride: size_of::<Vertex>() as BufferAddress,
             step_mode: VertexStepMode::Vertex,
-            attributes: &[
-                VertexAttribute {
-                    offset: 0,
-                    shader_location: 0,
-                    format: VertexFormat::Float32x3,
-                },
-                VertexAttribute {
-                    offset: mem::size_of::<[f32; 3]>() as BufferAddress,
-                    shader_location: 1,
-                    format: VertexFormat::Float32x2,
-                },
-            ],
+            attributes: &Self::ATTRIBUTES,
         }
     }
 }
