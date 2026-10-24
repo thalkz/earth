@@ -2,7 +2,6 @@ use std::time::{Duration, Instant};
 
 pub struct Clock {
     last_frame: Instant,
-    frame_count: u64,
     delta: Duration,
 }
 
@@ -11,7 +10,6 @@ impl Clock {
         let now = Instant::now();
         Self {
             last_frame: now,
-            frame_count: 0,
             delta: Duration::ZERO,
         }
     }
@@ -20,7 +18,6 @@ impl Clock {
         let now = Instant::now();
         self.delta = now - self.last_frame;
         self.last_frame = now;
-        self.frame_count += 1;
         self.delta
     }
 }

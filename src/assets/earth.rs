@@ -14,7 +14,7 @@ pub struct Earth {
 }
 
 impl Earth {
-    pub async fn load(
+    pub fn load(
         resolution: usize,
         subdivisions: usize,
         elevation_filename: &str,
@@ -103,7 +103,6 @@ fn create_face_part(
 
             let vertex = Vertex {
                 position: sphere_position.into(),
-                normal: sphere_position.into(),
                 tex_coords: patch_uv(sphere_position, center_u).into(),
             };
             vertices.push(vertex);

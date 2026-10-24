@@ -21,7 +21,7 @@ pub struct SceneConfig {
 }
 
 impl Scene {
-    pub async fn load(config: SceneConfig) -> anyhow::Result<Self> {
+    pub fn load(config: SceneConfig) -> anyhow::Result<Self> {
         let mut camera = Camera::new(config.width, config.height);
 
         let globe_camera = GlobeCamera::default();
@@ -39,8 +39,7 @@ impl Scene {
             EARTH_FACE_SUBDIVISION,
             &format!("earth/elevation_{}x{}.dds", TEXTURE_SIZE.0, TEXTURE_SIZE.1),
             &format!("earth/diffuse_{}x{}.dds", TEXTURE_SIZE.0, TEXTURE_SIZE.1),
-        )
-        .await?;
+        )?;
 
         Ok(Self {
             config,

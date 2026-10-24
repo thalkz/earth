@@ -30,7 +30,7 @@ impl State {
             enable_gizmos: true,
         };
 
-        let scene = Scene::load(scene_config).await?;
+        let scene = Scene::load(scene_config)?;
         println!("Scene loaded at {}ms", start.elapsed().as_millis());
 
         let render_scene = RenderScene::new(
