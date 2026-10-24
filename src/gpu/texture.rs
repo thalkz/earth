@@ -22,6 +22,7 @@ impl Texture {
             mag_filter: FilterMode::Linear,
             min_filter: FilterMode::Linear,
             mipmap_filter: MipmapFilterMode::Linear,
+            anisotropy_clamp: 16,
             ..Default::default()
         })
     }
