@@ -207,6 +207,7 @@ fn create_elevation_texture(
 pub struct CameraUniform {
     view_position: [f32; 4],
     view_proj: [[f32; 4]; 4],
+    inv_view_proj: [[f32; 4]; 4],
 }
 
 impl CameraUniform {
@@ -214,12 +215,15 @@ impl CameraUniform {
         Self {
             view_position: [0.0; 4],
             view_proj: Mat4::IDENTITY.to_cols_array_2d(),
+            inv_view_proj: Mat4::IDENTITY.to_cols_array_2d(),
         }
     }
 
     pub fn update_view_proj(&mut self, camera: &Camera) {
+        let view_proj = camera.build_view_projection_matrix();
         self.view_position = camera.eye.extend(1.0).to_array();
-        self.view_proj = camera.build_view_projection_matrix().to_cols_array_2d();
+        self.view_proj = view_proj.to_cols_array_2d();
+        self.inv_view_proj = view_proj.inverse().to_cols_array_2d();
     }
 }
 

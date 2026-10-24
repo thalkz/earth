@@ -1,7 +1,7 @@
 use crate::gpu::{GpuContext, SurfaceHandler, Texture};
-use crate::renderer::ForwardPass;
 use crate::renderer::gizmos::GizmosPass;
 use crate::renderer::render_scene::{CameraUniform, LightUniform, RenderScene};
+use crate::renderer::{ForwardPass, SkyboxPass};
 use wgpu::{
     BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType,
     BufferBindingType, Color, CommandEncoderDescriptor, Device, LoadOp, Operations,
@@ -12,6 +12,7 @@ use wgpu::{
 
 pub struct Renderer {
     forward_pass: ForwardPass,
+    skybox_pass: SkyboxPass,
     gizmos_pass: GizmosPass,
     pub bind_group_layouts: RendererBindGroupLayouts,
 }
@@ -49,10 +50,12 @@ impl Renderer {
             &light_bind_group_layout,
         );
 
+        let skybox_pass = SkyboxPass::new(device, color_format, &camera_bind_group_layout);
         let gizmos_pass = GizmosPass::new(device, color_format, &camera_bind_group_layout);
 
         Self {
             forward_pass,
+            skybox_pass,
             gizmos_pass,
             bind_group_layouts: RendererBindGroupLayouts {
                 texture_bind_group_layout,
@@ -122,6 +125,9 @@ impl Renderer {
                 &render_scene.light_bind_group,
                 &render_scene.elevation_bind_group,
             );
+
+            self.skybox_pass
+                .draw(&mut render_pass, &render_scene.camera_bind_group);
 
             if render_scene.render_gizmos.vertex_count > 0 {
                 self.gizmos_pass.draw(
