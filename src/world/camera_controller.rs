@@ -30,6 +30,12 @@ impl CameraController {
         viewport_size: Vec2,
     ) {
         let dt_secs = dt.as_secs_f32();
+        if dt_secs <= 0.0 {
+            return;
+        }
+
+        let friction = 8.0f32;
+        let decay = (-friction * dt_secs).exp();
 
         // 1. Orbit (Heading/Bearing) & Tilt (Pitch)
         // Activated by Right Click, Middle Click, or Left Click + (Ctrl or Shift)
@@ -45,8 +51,11 @@ impl CameraController {
             let delta = input.cursor_delta();
             let rot_sens = 0.005;
 
+            let d_heading = delta.x * rot_sens;
+            let d_pitch = -delta.y * rot_sens;
+
             // Horizontal drag rotates heading
-            self.globe_camera.heading += delta.x * rot_sens;
+            self.globe_camera.heading += d_heading;
             if self.globe_camera.heading > PI {
                 self.globe_camera.heading -= 2.0 * PI;
             } else if self.globe_camera.heading < -PI {
@@ -54,10 +63,38 @@ impl CameraController {
             }
 
             // Vertical drag tilts pitch (drag down tilts up toward nadir, drag up tilts toward horizon)
-            self.globe_camera.pitch = (self.globe_camera.pitch - delta.y * rot_sens)
+            self.globe_camera.pitch = (self.globe_camera.pitch + d_pitch)
                 .clamp(0.0, crate::world::globe_camera::MAX_PITCH);
-        } else if input.is_mouse_pressed(MouseButton::Left) {
-            // 2. Surface Pinned Dragging (Great Circle)
+
+            // Track orbit velocity
+            self.globe_camera.vel_heading = d_heading / dt_secs;
+            self.globe_camera.vel_pitch = d_pitch / dt_secs;
+        } else {
+            // Apply inertial orbit when not actively dragging orbit
+            if self.globe_camera.vel_heading.abs() > 1e-4 {
+                self.globe_camera.heading += self.globe_camera.vel_heading * dt_secs;
+                if self.globe_camera.heading > PI {
+                    self.globe_camera.heading -= 2.0 * PI;
+                } else if self.globe_camera.heading < -PI {
+                    self.globe_camera.heading += 2.0 * PI;
+                }
+                self.globe_camera.vel_heading *= decay;
+            } else {
+                self.globe_camera.vel_heading = 0.0;
+            }
+
+            if self.globe_camera.vel_pitch.abs() > 1e-4 {
+                self.globe_camera.pitch = (self.globe_camera.pitch
+                    + self.globe_camera.vel_pitch * dt_secs)
+                    .clamp(0.0, crate::world::globe_camera::MAX_PITCH);
+                self.globe_camera.vel_pitch *= decay;
+            } else {
+                self.globe_camera.vel_pitch = 0.0;
+            }
+        }
+
+        // 2. Surface Pinned Dragging (Great Circle)
+        if !is_orbit_down && input.is_mouse_pressed(MouseButton::Left) {
             if let Some(cursor) = input.cursor_position() {
                 let (ray_origin, ray_dir) = camera.screen_to_ray(cursor, viewport_size);
                 let hit = Camera::ray_intersect_sphere_or_silhouette(
@@ -70,6 +107,7 @@ impl CameraController {
                 if !self.is_dragging_surface {
                     self.is_dragging_surface = true;
                     self.drag_start_hit = Some(hit);
+                    self.globe_camera.vel_target = Vec3::ZERO;
                 } else if let Some(p0) = self.drag_start_hit {
                     let p1 = hit;
                     let axis = p1.cross(p0);
@@ -80,6 +118,11 @@ impl CameraController {
                         let curr_pos = Vec3::from(self.globe_camera.target);
                         let new_pos = (rot * curr_pos).normalize();
                         self.globe_camera.target = LatLng::from(new_pos);
+
+                        // Angular velocity vector in 3D: axis * angular_speed
+                        self.globe_camera.vel_target = (axis / len) * (angle / dt_secs);
+                    } else {
+                        self.globe_camera.vel_target = Vec3::ZERO;
                     }
 
                     // Update camera so subsequent ray-cast aligns with current cursor
@@ -96,6 +139,20 @@ impl CameraController {
         } else {
             self.is_dragging_surface = false;
             self.drag_start_hit = None;
+
+            // Apply inertial surface panning when mouse is released
+            let speed = self.globe_camera.vel_target.length();
+            if speed > 1e-4 {
+                let axis = self.globe_camera.vel_target / speed;
+                let angle = speed * dt_secs;
+                let rot = Quat::from_axis_angle(axis, angle);
+                let curr_pos = Vec3::from(self.globe_camera.target);
+                self.globe_camera.target = LatLng::from((rot * curr_pos).normalize());
+
+                self.globe_camera.vel_target *= decay;
+            } else {
+                self.globe_camera.vel_target = Vec3::ZERO;
+            }
         }
 
         // 3. Anchor-Aware Zoom (Mouse Wheel & Trackpad Pinch)
@@ -108,6 +165,9 @@ impl CameraController {
                 crate::world::globe_camera::MAX_DISTANCE,
             );
             self.globe_camera.distance = new_dist;
+
+            // Zoom velocity rate for smooth continuation
+            self.globe_camera.vel_distance = -zoom_input * 1.5;
 
             // Zoom toward cursor anchor point if cursor is on globe
             if let Some(cursor) = input.cursor_position() {
@@ -122,6 +182,16 @@ impl CameraController {
                     self.globe_camera.target = LatLng::from(new_pos);
                 }
             }
+        } else if self.globe_camera.vel_distance.abs() > 1e-3 {
+            // Apply inertial zoom
+            let zoom_factor = (self.globe_camera.vel_distance * dt_secs).exp();
+            self.globe_camera.distance = (self.globe_camera.distance * zoom_factor).clamp(
+                crate::world::globe_camera::MIN_DISTANCE,
+                crate::world::globe_camera::MAX_DISTANCE,
+            );
+            self.globe_camera.vel_distance *= decay;
+        } else {
+            self.globe_camera.vel_distance = 0.0;
         }
 
         // 4. Keyboard Controls

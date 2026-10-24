@@ -1,6 +1,6 @@
 use crate::geo::LatLng;
 use crate::world::Camera;
-use glam::{Vec2, Vec3};
+use glam::Vec3;
 use std::f32::consts::PI;
 
 pub const MIN_DISTANCE: f32 = 0.015; // Safe distance above mountains (1.015 altitude)
@@ -17,8 +17,7 @@ pub struct GlobeCamera {
     pub pitch: f32,
     /// Azimuth angle in radians (0.0 = North, PI/2 = East)
     pub heading: f32,
-    /// Dynamic velocities for smooth inertia
-    pub vel_target: Vec2,
+    pub vel_target: Vec3,
     pub vel_distance: f32,
     pub vel_heading: f32,
     pub vel_pitch: f32,
@@ -31,7 +30,7 @@ impl Default for GlobeCamera {
             distance: 3.5,
             pitch: 0.0,
             heading: 0.0,
-            vel_target: Vec2::ZERO,
+            vel_target: Vec3::ZERO,
             vel_distance: 0.0,
             vel_heading: 0.0,
             vel_pitch: 0.0,
@@ -90,7 +89,7 @@ impl GlobeCamera {
         self.distance = 3.5;
         self.pitch = 0.0;
         self.heading = 0.0;
-        self.vel_target = Vec2::ZERO;
+        self.vel_target = Vec3::ZERO;
         self.vel_distance = 0.0;
         self.vel_heading = 0.0;
         self.vel_pitch = 0.0;
