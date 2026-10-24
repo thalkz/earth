@@ -104,30 +104,9 @@ impl RenderScene {
         });
 
         let frustum = Frustum::from_view_projection(scene.camera.build_view_projection_matrix());
-        let earth_occluder = HorizonOccluder::new(glam::Vec3::ZERO, 0.998);
-        let camera_horizon = earth_occluder.prepare_camera(scene.camera.eye);
+        let visible_earth_meshes = Vec::with_capacity(render_earth.meshes.len());
 
-        let mut visible_earth_meshes = Vec::with_capacity(render_earth.meshes.len());
-        for (i, mesh) in render_earth.meshes.iter().enumerate() {
-            if let Some((camera_dir, camera_horizon_angle)) = camera_horizon
-                && earth_occluder.is_sphere_behind_horizon(
-                    camera_dir,
-                    camera_horizon_angle,
-                    &mesh.bounding_sphere,
-                )
-            {
-                continue;
-            }
-            if !frustum.contains_sphere(&mesh.bounding_sphere) {
-                continue;
-            }
-            let dist_to_center = scene.camera.eye.distance(mesh.bounding_sphere.center);
-            let closest_dist = (dist_to_center - mesh.bounding_sphere.radius).max(0.0);
-            let lod = select_lod(closest_dist);
-            visible_earth_meshes.push(VisibleMesh { mesh_index: i, lod });
-        }
-
-        Self {
+        let mut render_scene = Self {
             render_earth,
             render_gizmos,
             camera_buffer,
@@ -137,7 +116,10 @@ impl RenderScene {
             elevation_bind_group,
             frustum,
             visible_earth_meshes,
-        }
+        };
+
+        render_scene.update(device, queue, scene);
+        render_scene
     }
 
     /// Called every frame to write updated positions/matrices to the existing buffers
