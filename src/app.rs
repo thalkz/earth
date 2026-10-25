@@ -6,7 +6,7 @@ mod time;
 
 use crate::app::app_handler::App;
 pub use framerate_logger::FramerateLogger;
-pub use input::InputState;
+pub use input::{InputState, TouchGesture};
 pub use state::State;
 pub use time::Clock;
 use winit::event_loop::EventLoop;

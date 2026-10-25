@@ -80,6 +80,6 @@ val buildRustAndroid = tasks.register("buildRustAndroid") {
     }
 }
 
-tasks.matching { it.name.startsWith("merge") && it.name.endsWith("JniLibFolders") }.configureEach {
+tasks.named("preBuild") {
     dependsOn(buildRustAndroid)
 }

@@ -65,6 +65,14 @@ impl State {
     }
 
     pub fn update(&mut self, dt: Duration, input: &InputState) {
+        let size = self.window.inner_size();
+        if size.width > 0
+            && size.height > 0
+            && (size.width != self.surface.config.width
+                || size.height != self.surface.config.height)
+        {
+            self.resize(size.width, size.height);
+        }
         self.scene.update(dt, input);
     }
 }
