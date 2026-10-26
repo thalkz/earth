@@ -12,6 +12,7 @@ pub struct Scene {
     pub light: Light,
     pub earth: Earth,
     pub gizmos: Gizmos,
+    pub elapsed_time: f32,
 }
 
 pub struct SceneConfig {
@@ -54,6 +55,7 @@ impl Scene {
             light,
             earth,
             gizmos,
+            elapsed_time: 0.0,
         })
     }
 
@@ -64,6 +66,7 @@ impl Scene {
     }
 
     pub fn update(&mut self, dt: Duration, input: &InputState) {
+        self.elapsed_time += dt.as_secs_f32();
         let viewport_size = Vec2::new(self.config.width as f32, self.config.height as f32);
         self.camera_controller
             .update_camera(&mut self.camera, input, dt, viewport_size);

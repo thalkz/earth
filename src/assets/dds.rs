@@ -67,6 +67,41 @@ pub struct DdsHeader {
 }
 
 impl DdsHeader {
+    pub fn new_rgba8_2d(width: u32, height: u32, mipmap_count: u32) -> Self {
+        let mut flags = DDSD_CAPS | DDSD_HEIGHT | DDSD_WIDTH | DDSD_PITCH | DDSD_PIXELFORMAT;
+        let mut caps = DDSCAPS_TEXTURE;
+        if mipmap_count > 1 {
+            flags |= DDSD_MIPMAPCOUNT;
+            caps |= DDSCAPS_COMPLEX | DDSCAPS_MIPMAP;
+        }
+
+        Self {
+            size: 124,
+            flags,
+            height,
+            width,
+            pitch_or_linear_size: width * 4,
+            depth: 1,
+            mipmap_count,
+            reserved1: [0; 11],
+            pixel_format: DdsPixelFormat {
+                size: 32,
+                flags: DDPF_RGB | DDPF_ALPHAPIXELS,
+                four_cc: 0,
+                rgb_bit_count: 32,
+                r_bit_mask: 0x0000_00FF,
+                g_bit_mask: 0x0000_FF00,
+                b_bit_mask: 0x00FF_0000,
+                a_bit_mask: 0xFF00_0000,
+            },
+            caps,
+            caps2: 0,
+            caps3: 0,
+            caps4: 0,
+            reserved2: 0,
+        }
+    }
+
     pub fn new_rgba8_cubemap(face_size: u32, mipmap_count: u32) -> Self {
         let mut flags = DDSD_CAPS | DDSD_HEIGHT | DDSD_WIDTH | DDSD_PITCH | DDSD_PIXELFORMAT;
         let mut caps = DDSCAPS_TEXTURE | DDSCAPS_COMPLEX;
@@ -210,35 +245,36 @@ pub fn parse_dds(mut data: Vec<u8>) -> anyhow::Result<ImageAsset> {
     };
 
     let is_cube = header.caps2 & DDSCAPS2_CUBEMAP != 0;
-    if !is_cube {
-        anyhow::bail!("Only cubemap DDS textures are supported");
-    }
-    if width != height {
+    if is_cube && width != height {
         anyhow::bail!("Cubemap faces must be square, got {}x{}", width, height);
     }
-    const FACE_COUNT: usize = 6;
+    let face_count: usize = if is_cube { 6 } else { 1 };
 
-    let mut mip_offsets = Vec::with_capacity(FACE_COUNT * mip_count as usize);
+    let mut mip_offsets = Vec::with_capacity(face_count * mip_count as usize);
     let mut current_offset = header_size;
 
-    for _face in 0..FACE_COUNT {
-        let mut cur_size = width;
+    for _face in 0..face_count {
+        let mut cur_w = width;
+        let mut cur_h = height;
         for _ in 0..mip_count {
             let level_len = match format {
                 wgpu::TextureFormat::Bc1RgbaUnorm | wgpu::TextureFormat::Bc1RgbaUnormSrgb => {
-                    let blocks = ((cur_size + 3) / 4).max(1) as usize;
-                    blocks * blocks * 8
+                    let blocks_x = ((cur_w + 3) / 4).max(1) as usize;
+                    let blocks_y = ((cur_h + 3) / 4).max(1) as usize;
+                    blocks_x * blocks_y * 8
                 }
                 wgpu::TextureFormat::Bc7RgbaUnorm | wgpu::TextureFormat::Bc7RgbaUnormSrgb => {
-                    let blocks = ((cur_size + 3) / 4).max(1) as usize;
-                    blocks * blocks * 16
+                    let blocks_x = ((cur_w + 3) / 4).max(1) as usize;
+                    let blocks_y = ((cur_h + 3) / 4).max(1) as usize;
+                    blocks_x * blocks_y * 16
                 }
-                _ => (cur_size as usize) * (cur_size as usize) * 4,
+                _ => (cur_w as usize) * (cur_h as usize) * 4,
             };
             let next_offset = current_offset + level_len;
             mip_offsets.push(current_offset..next_offset);
             current_offset = next_offset;
-            cur_size = (cur_size / 2).max(1);
+            cur_w = (cur_w / 2).max(1);
+            cur_h = (cur_h / 2).max(1);
         }
     }
 
@@ -246,7 +282,7 @@ pub fn parse_dds(mut data: Vec<u8>) -> anyhow::Result<ImageAsset> {
         anyhow::bail!(
             "DDS payload truncated: expected at least {} bytes for {} faces x {} mips, got {}",
             current_offset,
-            FACE_COUNT,
+            face_count,
             mip_count,
             data.len()
         );
@@ -264,13 +300,23 @@ pub fn parse_dds(mut data: Vec<u8>) -> anyhow::Result<ImageAsset> {
             });
     }
 
-    Ok(ImageAsset::Cubemap {
-        width,
-        height,
-        format,
-        data,
-        mip_offsets,
-    })
+    if is_cube {
+        Ok(ImageAsset::Cubemap {
+            width,
+            height,
+            format,
+            data,
+            mip_offsets,
+        })
+    } else {
+        Ok(ImageAsset::Texture2D {
+            width,
+            height,
+            format,
+            data,
+            mip_offsets,
+        })
+    }
 }
 
 #[cfg(test)]
@@ -289,11 +335,42 @@ mod tests {
                 format,
                 mip_offsets,
                 ..
-            } = asset;
+            } = asset
+            else {
+                panic!("Expected ImageAsset::Cubemap");
+            };
             assert_eq!(width, 4096);
             assert_eq!(height, 4096);
             assert_eq!(format, wgpu::TextureFormat::Bc1RgbaUnormSrgb);
             assert_eq!(mip_offsets.len(), 6 * 8); // 6 faces * 8 mips
         }
+    }
+
+    #[test]
+    fn test_parse_2d_rgba8_dds() {
+        let header = DdsHeader::new_rgba8_2d(4, 4, 2);
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&DDS_MAGIC.to_le_bytes());
+        bytes.extend_from_slice(bytemuck::bytes_of(&header));
+        // Mip 0: 4x4x4 = 64 bytes
+        bytes.extend_from_slice(&[128u8; 64]);
+        // Mip 1: 2x2x4 = 16 bytes
+        bytes.extend_from_slice(&[128u8; 16]);
+
+        let asset = parse_dds(bytes).expect("Should parse 2D RGBA8 DDS");
+        let ImageAsset::Texture2D {
+            width,
+            height,
+            format,
+            mip_offsets,
+            ..
+        } = asset
+        else {
+            panic!("Expected ImageAsset::Texture2D");
+        };
+        assert_eq!(width, 4);
+        assert_eq!(height, 4);
+        assert_eq!(format, wgpu::TextureFormat::Rgba8Unorm);
+        assert_eq!(mip_offsets.len(), 2);
     }
 }

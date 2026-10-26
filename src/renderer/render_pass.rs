@@ -23,11 +23,13 @@ pub struct RendererBindGroupLayouts {
     pub camera_bind_group_layout: BindGroupLayout,
     pub light_bind_group_layout: BindGroupLayout,
     pub default_sampler: Sampler,
+    pub repeat_sampler: Sampler,
 }
 
 impl Renderer {
     pub fn new(device: &Device, color_format: TextureFormat) -> Self {
         let default_sampler = Texture::create_sampler(device);
+        let repeat_sampler = Texture::create_repeat_sampler(device);
 
         let texture_bind_group_layout =
             device.create_bind_group_layout(&Texture::bind_group_layout());
@@ -63,6 +65,7 @@ impl Renderer {
                 camera_bind_group_layout,
                 light_bind_group_layout,
                 default_sampler,
+                repeat_sampler,
             },
         }
     }
@@ -186,6 +189,42 @@ impl Texture {
                 BindGroupLayoutEntry {
                     binding: 1,
                     visibility: ShaderStages::VERTEX_FRAGMENT,
+                    ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                    count: None,
+                },
+                BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Texture {
+                        multisampled: false,
+                        view_dimension: TextureViewDimension::Cube,
+                        sample_type: TextureSampleType::Float { filterable: true },
+                    },
+                    count: None,
+                },
+                BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Texture {
+                        multisampled: false,
+                        view_dimension: TextureViewDimension::D2,
+                        sample_type: TextureSampleType::Float { filterable: true },
+                    },
+                    count: None,
+                },
+                BindGroupLayoutEntry {
+                    binding: 4,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Texture {
+                        multisampled: false,
+                        view_dimension: TextureViewDimension::D2,
+                        sample_type: TextureSampleType::Float { filterable: true },
+                    },
+                    count: None,
+                },
+                BindGroupLayoutEntry {
+                    binding: 5,
+                    visibility: ShaderStages::FRAGMENT,
                     ty: BindingType::Sampler(SamplerBindingType::Filtering),
                     count: None,
                 },

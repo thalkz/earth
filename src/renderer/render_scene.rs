@@ -1,4 +1,4 @@
-use crate::assets::ImageAsset;
+use crate::assets::{Earth, ImageAsset};
 use crate::geo::{Frustum, HorizonOccluder};
 use crate::gpu::Texture;
 use crate::renderer::render_pass::RendererBindGroupLayouts;
@@ -7,8 +7,8 @@ use crate::world::{Camera, Light, Scene};
 use glam::Mat4;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{
-    BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindingResource, Buffer,
-    BufferUsages, Device, Queue, Sampler,
+    BindGroup, BindGroupDescriptor, BindGroupEntry, BindingResource, Buffer, BufferUsages, Device,
+    Queue,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -58,13 +58,8 @@ impl RenderScene {
             &scene.earth.model,
         );
 
-        let elevation_bind_group = create_elevation_texture(
-            device,
-            queue,
-            &layouts.elevation_bind_group_layout,
-            &layouts.default_sampler,
-            &scene.earth.elevation,
-        );
+        let elevation_bind_group =
+            create_elevation_texture(device, queue, layouts, &scene.earth);
 
         let mut render_gizmos = RenderGizmos::new(device);
         render_gizmos.update(device, queue, &scene.gizmos);
@@ -157,7 +152,8 @@ impl RenderScene {
             bytemuck::cast_slice(&[camera_uniform]),
         );
 
-        let light_uniform: LightUniform = scene.light.into();
+        let mut light_uniform: LightUniform = scene.light.into();
+        light_uniform.time = scene.elapsed_time;
         queue.write_buffer(
             &self.light_buffer,
             0,
@@ -168,26 +164,41 @@ impl RenderScene {
     }
 }
 
+fn create_2d_from_asset(
+    device: &Device,
+    queue: &Queue,
+    image: &ImageAsset,
+    label: &str,
+) -> Texture {
+    let mip_levels: Vec<&[u8]> = image.mip_levels().collect();
+    match image {
+        ImageAsset::Texture2D {
+            width,
+            height,
+            format,
+            ..
+        } => Texture::create_2d(device, queue, *width, *height, *format, &mip_levels, Some(label)),
+        ImageAsset::Cubemap { width, format, .. } => {
+            Texture::create_cube(device, queue, *width, *format, &mip_levels, Some(label))
+        }
+    }
+}
+
 fn create_elevation_texture(
     device: &Device,
     queue: &Queue,
-    texture_bind_group_layout: &BindGroupLayout,
-    sampler: &Sampler,
-    image: &ImageAsset,
+    layouts: &RendererBindGroupLayouts,
+    earth: &Earth,
 ) -> BindGroup {
-    let ImageAsset::Cubemap { width, format, .. } = image;
-    let mip_levels: Vec<&[u8]> = image.mip_levels().collect();
-    let elevation_texture = Texture::create_cube(
-        device,
-        queue,
-        *width,
-        *format,
-        &mip_levels,
-        Some("elevation"),
-    );
+    let elevation_texture = create_2d_from_asset(device, queue, &earth.elevation, "elevation");
+    let ocean_texture = create_2d_from_asset(device, queue, &earth.ocean, "ocean_diffuse");
+    let water_normal_1_texture =
+        create_2d_from_asset(device, queue, &earth.water_normal_1, "water_normal_1");
+    let water_normal_2_texture =
+        create_2d_from_asset(device, queue, &earth.water_normal_2, "water_normal_2");
 
     device.create_bind_group(&BindGroupDescriptor {
-        layout: texture_bind_group_layout,
+        layout: &layouts.elevation_bind_group_layout,
         entries: &[
             BindGroupEntry {
                 binding: 0,
@@ -195,7 +206,23 @@ fn create_elevation_texture(
             },
             BindGroupEntry {
                 binding: 1,
-                resource: BindingResource::Sampler(sampler),
+                resource: BindingResource::Sampler(&layouts.default_sampler),
+            },
+            BindGroupEntry {
+                binding: 2,
+                resource: BindingResource::TextureView(&ocean_texture.view),
+            },
+            BindGroupEntry {
+                binding: 3,
+                resource: BindingResource::TextureView(&water_normal_1_texture.view),
+            },
+            BindGroupEntry {
+                binding: 4,
+                resource: BindingResource::TextureView(&water_normal_2_texture.view),
+            },
+            BindGroupEntry {
+                binding: 5,
+                resource: BindingResource::Sampler(&layouts.repeat_sampler),
             },
         ],
         label: Some("Elevation Bind Group"),
@@ -231,7 +258,7 @@ impl CameraUniform {
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct LightUniform {
     pub direction: [f32; 3],
-    _padding: u32,
+    pub time: f32,
     pub color: [f32; 3],
     _padding2: u32,
 }
@@ -240,7 +267,7 @@ impl LightUniform {
     pub fn new(direction: [f32; 3], color: [f32; 3]) -> Self {
         Self {
             direction,
-            _padding: 0,
+            time: 0.0,
             color,
             _padding2: 0,
         }

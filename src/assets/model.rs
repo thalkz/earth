@@ -49,15 +49,26 @@ pub enum ImageAsset {
         data: Vec<u8>,
         mip_offsets: Vec<Range<usize>>,
     },
+    Texture2D {
+        width: u32,
+        height: u32,
+        format: wgpu::TextureFormat,
+        data: Vec<u8>,
+        mip_offsets: Vec<Range<usize>>,
+    },
 }
 
 impl ImageAsset {
     pub fn mip_levels(&self) -> impl Iterator<Item = &[u8]> {
-        match self {
+        let (data, mip_offsets) = match self {
             ImageAsset::Cubemap {
                 data, mip_offsets, ..
-            } => mip_offsets.iter().map(|range| &data[range.clone()]),
-        }
+            }
+            | ImageAsset::Texture2D {
+                data, mip_offsets, ..
+            } => (data, mip_offsets),
+        };
+        mip_offsets.iter().map(|range| &data[range.clone()])
     }
 }
 

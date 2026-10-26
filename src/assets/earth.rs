@@ -9,6 +9,9 @@ pub struct Earth {
     pub subdivisions: usize,
     pub model: Model,
     pub elevation: ImageAsset,
+    pub ocean: ImageAsset,
+    pub water_normal_1: ImageAsset,
+    pub water_normal_2: ImageAsset,
 }
 
 impl Earth {
@@ -21,23 +24,45 @@ impl Earth {
         anyhow::ensure!(resolution >= 2, "resolution must be at least 2");
         anyhow::ensure!(subdivisions >= 1, "subdivisions must be at least 1");
 
-        let (elevation, (meshes, materials)) = rayon::join(
-            || create_elevation(elevation_filename),
-            || {
-                rayon::join(
-                    || create_meshes(resolution + 1, subdivisions),
-                    || create_material(diffuse_filename),
-                )
-            },
-        );
+        let (((elevation, ocean), (water_normal_1, water_normal_2)), (meshes, materials)) =
+            rayon::join(
+                || {
+                    rayon::join(
+                        || {
+                            rayon::join(
+                                || create_elevation(elevation_filename),
+                                || assets::load_dds_image("earth/ocean_cube_1024x1024.dds"),
+                            )
+                        },
+                        || {
+                            rayon::join(
+                                || assets::load_dds_image("earth/water_normal_1.dds"),
+                                || assets::load_dds_image("earth/water_normal_2.dds"),
+                            )
+                        },
+                    )
+                },
+                || {
+                    rayon::join(
+                        || create_meshes(resolution + 1, subdivisions),
+                        || create_material(diffuse_filename),
+                    )
+                },
+            );
 
         let elevation = elevation?;
+        let ocean = ocean?;
+        let water_normal_1 = water_normal_1?;
+        let water_normal_2 = water_normal_2?;
         let materials = materials?;
 
         let result = Earth {
             resolution: resolution + 1,
             subdivisions,
             elevation,
+            ocean,
+            water_normal_1,
+            water_normal_2,
             model: Model { meshes, materials },
         };
         Ok(result)

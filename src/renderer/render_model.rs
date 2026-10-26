@@ -48,16 +48,31 @@ impl RenderModel {
             .iter()
             .map(|material| {
                 let image = &material.diffuse;
-                let ImageAsset::Cubemap { width, format, .. } = image;
                 let mip_levels: Vec<&[u8]> = image.mip_levels().collect();
-                let texture = Texture::create_cube(
-                    device,
-                    queue,
-                    *width,
-                    *format,
-                    &mip_levels,
-                    Some(&material.name),
-                );
+                let texture = match image {
+                    ImageAsset::Cubemap { width, format, .. } => Texture::create_cube(
+                        device,
+                        queue,
+                        *width,
+                        *format,
+                        &mip_levels,
+                        Some(&material.name),
+                    ),
+                    ImageAsset::Texture2D {
+                        width,
+                        height,
+                        format,
+                        ..
+                    } => Texture::create_2d(
+                        device,
+                        queue,
+                        *width,
+                        *height,
+                        *format,
+                        &mip_levels,
+                        Some(&material.name),
+                    ),
+                };
 
                 let texture_bind_group = device.create_bind_group(&BindGroupDescriptor {
                     layout: texture_bind_group_layout,

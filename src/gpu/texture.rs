@@ -27,6 +27,93 @@ impl Texture {
         })
     }
 
+    pub fn create_repeat_sampler(device: &Device) -> Sampler {
+        device.create_sampler(&SamplerDescriptor {
+            address_mode_u: AddressMode::Repeat,
+            address_mode_v: AddressMode::Repeat,
+            address_mode_w: AddressMode::Repeat,
+            mag_filter: FilterMode::Linear,
+            min_filter: FilterMode::Linear,
+            mipmap_filter: MipmapFilterMode::Linear,
+            anisotropy_clamp: 16,
+            ..Default::default()
+        })
+    }
+
+    pub fn create_2d(
+        device: &Device,
+        queue: &Queue,
+        width: u32,
+        height: u32,
+        format: TextureFormat,
+        mip_levels: &[impl AsRef<[u8]>],
+        label: Option<&str>,
+    ) -> Self {
+        let mip_level_count = mip_levels.len() as u32;
+        let size = Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        };
+        let texture = device.create_texture(&TextureDescriptor {
+            label,
+            size,
+            mip_level_count,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format,
+            usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+
+        let (block_w, block_h) = format.block_dimensions();
+        let block_size = format.block_copy_size(None).unwrap_or(4);
+
+        let mut mip_w = width;
+        let mut mip_h = height;
+
+        for (mip, data) in mip_levels.iter().enumerate() {
+            let mip_size = Extent3d {
+                width: mip_w,
+                height: mip_h,
+                depth_or_array_layers: 1,
+            };
+            let blocks_x = mip_w.div_ceil(block_w);
+            let blocks_y = mip_h.div_ceil(block_h);
+            queue.write_texture(
+                TexelCopyTextureInfo {
+                    aspect: TextureAspect::All,
+                    texture: &texture,
+                    mip_level: mip as u32,
+                    origin: Origin3d::ZERO,
+                },
+                data.as_ref(),
+                TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(blocks_x * block_size),
+                    rows_per_image: Some(blocks_y),
+                },
+                mip_size,
+            );
+            mip_w = (mip_w / 2).max(1);
+            mip_h = (mip_h / 2).max(1);
+        }
+
+        let view = texture.create_view(&TextureViewDescriptor {
+            label,
+            format: Some(format),
+            dimension: Some(TextureViewDimension::D2),
+            aspect: TextureAspect::All,
+            base_mip_level: 0,
+            mip_level_count: Some(mip_level_count),
+            base_array_layer: 0,
+            array_layer_count: Some(1),
+            usage: None,
+        });
+
+        Self { texture, view }
+    }
+
     pub fn create_cube(
         device: &Device,
         queue: &Queue,
