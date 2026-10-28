@@ -17,23 +17,20 @@ pub fn load_dds_image(filename: &str) -> anyhow::Result<ImageAsset> {
 }
 
 fn resolve_resource_path(filename: &str) -> PathBuf {
-    // 1. Check relative to current working directory: ./res/<filename>
     let relative = Path::new("res").join(filename);
     if relative.exists() {
         return relative;
     }
 
-    // 2. Check relative to executable directory: <exe_dir>/res/<filename>
-    if let Ok(exe_path) = std::env::current_exe() {
-        if let Some(exe_dir) = exe_path.parent() {
-            let exe_relative = exe_dir.join("res").join(filename);
-            if exe_relative.exists() {
-                return exe_relative;
-            }
+    if let Ok(exe_path) = std::env::current_exe()
+        && let Some(exe_dir) = exe_path.parent()
+    {
+        let exe_relative = exe_dir.join("res").join(filename);
+        if exe_relative.exists() {
+            return exe_relative;
         }
     }
 
-    // 3. Fallback to compile-time crate root (e.g. for tests running in different directories)
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("res")
         .join(filename)
@@ -41,23 +38,20 @@ fn resolve_resource_path(filename: &str) -> PathBuf {
 
 pub fn load_binary(filename: &str) -> anyhow::Result<Vec<u8>> {
     #[cfg(target_os = "android")]
-    {
+    if let Some(app) = ANDROID_APP.get() {
         use std::ffi::CString;
         use std::io::Read;
 
-        if let Some(app) = ANDROID_APP.get() {
-            let asset_manager = app.asset_manager();
-            let c_path = CString::new(filename)?;
-            let mut asset = asset_manager
-                .open(&c_path)
-                .ok_or_else(|| anyhow::anyhow!("Android asset not found in APK: {filename}"))?;
-            let mut buf = Vec::with_capacity(asset.length());
-            asset.read_to_end(&mut buf)?;
-            return Ok(buf);
-        }
+        let asset_manager = app.asset_manager();
+        let c_path = CString::new(filename)?;
+        let mut asset = asset_manager
+            .open(&c_path)
+            .ok_or_else(|| anyhow::anyhow!("Android asset not found in APK: {filename}"))?;
+        let mut buf = Vec::with_capacity(asset.length());
+        asset.read_to_end(&mut buf)?;
+        return Ok(buf);
     }
 
     let path = resolve_resource_path(filename);
-    let data = fs::read(&path)?;
-    Ok(data)
+    Ok(fs::read(path)?)
 }

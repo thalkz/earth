@@ -1,9 +1,15 @@
 use crate::app::InputState;
 use crate::assets::Earth;
-use crate::world::{Camera, CameraController, Gizmos, GlobeCamera, Light};
+use crate::world::{Camera, CameraController, Gizmos, GlobeCamera};
 use glam::{Quat, Vec2, Vec3};
 use std::time::Duration;
 use winit::keyboard::KeyCode;
+
+#[derive(Debug, Clone, Copy)]
+pub struct Light {
+    pub direction: Vec3,
+    pub color: Vec3,
+}
 
 pub struct Scene {
     pub config: SceneConfig,
@@ -29,7 +35,10 @@ impl Scene {
         globe_camera.update_camera(&mut camera);
 
         let camera_controller = CameraController::new(globe_camera);
-        let light = Light::new(glam::vec3(2.0, 0.0, 2.0), glam::vec3(1.0, 1.0, 1.0));
+        let light = Light {
+            direction: glam::vec3(2.0, 0.0, 2.0),
+            color: Vec3::ONE,
+        };
         let gizmos = Gizmos::new();
 
         #[cfg(not(target_os = "android"))]
@@ -47,14 +56,8 @@ impl Scene {
         let earth = Earth::load(
             SUBDIVISION_RESOLUTION,
             EARTH_FACE_SUBDIVISION,
-            &format!(
-                "earth/elevation_cube_{}x{}.dds",
-                CUBE_FACE_SIZE, CUBE_FACE_SIZE
-            ),
-            &format!(
-                "earth/diffuse_cube_{}x{}.dds",
-                CUBE_FACE_SIZE, CUBE_FACE_SIZE
-            ),
+            &format!("earth/elevation_cube_{CUBE_FACE_SIZE}x{CUBE_FACE_SIZE}.dds"),
+            &format!("earth/diffuse_cube_{CUBE_FACE_SIZE}x{CUBE_FACE_SIZE}.dds"),
         )?;
 
         Ok(Self {
@@ -86,8 +89,7 @@ impl Scene {
 
         self.gizmos.clear();
         if self.config.enable_gizmos && input.is_key_pressed(KeyCode::Space) {
-            let white = [1.0; 4];
-            self.gizmos.add_model(&self.earth.model, white);
+            self.gizmos.add_model(&self.earth.model, [1.0; 4]);
         }
     }
 }

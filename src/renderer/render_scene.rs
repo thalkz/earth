@@ -1,4 +1,4 @@
-use crate::assets::{Earth, ImageAsset};
+use crate::assets::Earth;
 use crate::geo::{Frustum, HorizonOccluder};
 use crate::gpu::Texture;
 use crate::renderer::render_pass::RendererBindGroupLayouts;
@@ -20,15 +20,10 @@ pub struct VisibleMesh {
 pub const LOD_DISTANCE_THRESHOLDS: [f32; 3] = [0.2, 0.4, 1.0];
 
 pub fn select_lod(distance: f32) -> usize {
-    if distance < LOD_DISTANCE_THRESHOLDS[0] {
-        0
-    } else if distance < LOD_DISTANCE_THRESHOLDS[1] {
-        1
-    } else if distance < LOD_DISTANCE_THRESHOLDS[2] {
-        2
-    } else {
-        3
-    }
+    LOD_DISTANCE_THRESHOLDS
+        .iter()
+        .position(|&threshold| distance < threshold)
+        .unwrap_or(3)
 }
 
 pub struct RenderScene {
@@ -164,45 +159,23 @@ impl RenderScene {
     }
 }
 
-fn create_2d_from_asset(
-    device: &Device,
-    queue: &Queue,
-    image: &ImageAsset,
-    label: &str,
-) -> Texture {
-    let mip_levels: Vec<&[u8]> = image.mip_levels().collect();
-    match image {
-        ImageAsset::Texture2D {
-            width,
-            height,
-            format,
-            ..
-        } => Texture::create_2d(device, queue, *width, *height, *format, &mip_levels, Some(label)),
-        ImageAsset::Cubemap { width, format, .. } => {
-            Texture::create_cube(device, queue, *width, *format, &mip_levels, Some(label))
-        }
-    }
-}
-
 fn create_elevation_texture(
     device: &Device,
     queue: &Queue,
     layouts: &RendererBindGroupLayouts,
     earth: &Earth,
 ) -> BindGroup {
-    let elevation_texture = create_2d_from_asset(device, queue, &earth.elevation, "elevation");
-    let ocean_texture = create_2d_from_asset(device, queue, &earth.ocean, "ocean_diffuse");
-    let water_normal_1_texture =
-        create_2d_from_asset(device, queue, &earth.water_normal_1, "water_normal_1");
-    let water_normal_2_texture =
-        create_2d_from_asset(device, queue, &earth.water_normal_2, "water_normal_2");
+    let elevation = Texture::from_asset(device, queue, &earth.elevation, Some("elevation"));
+    let ocean = Texture::from_asset(device, queue, &earth.ocean, Some("ocean_diffuse"));
+    let water_1 = Texture::from_asset(device, queue, &earth.water_normal_1, Some("water_normal_1"));
+    let water_2 = Texture::from_asset(device, queue, &earth.water_normal_2, Some("water_normal_2"));
 
     device.create_bind_group(&BindGroupDescriptor {
         layout: &layouts.elevation_bind_group_layout,
         entries: &[
             BindGroupEntry {
                 binding: 0,
-                resource: BindingResource::TextureView(&elevation_texture.view),
+                resource: BindingResource::TextureView(&elevation.view),
             },
             BindGroupEntry {
                 binding: 1,
@@ -210,15 +183,15 @@ fn create_elevation_texture(
             },
             BindGroupEntry {
                 binding: 2,
-                resource: BindingResource::TextureView(&ocean_texture.view),
+                resource: BindingResource::TextureView(&ocean.view),
             },
             BindGroupEntry {
                 binding: 3,
-                resource: BindingResource::TextureView(&water_normal_1_texture.view),
+                resource: BindingResource::TextureView(&water_1.view),
             },
             BindGroupEntry {
                 binding: 4,
-                resource: BindingResource::TextureView(&water_normal_2_texture.view),
+                resource: BindingResource::TextureView(&water_2.view),
             },
             BindGroupEntry {
                 binding: 5,

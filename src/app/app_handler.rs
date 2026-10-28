@@ -1,5 +1,6 @@
-use crate::app::{Clock, FramerateLogger, InputState, State};
+use crate::app::{FramerateLogger, InputState, State};
 use std::sync::Arc;
+use std::time::Instant;
 use winit::application::ApplicationHandler;
 use winit::event::{KeyEvent, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
@@ -9,7 +10,7 @@ use winit::window::{Window, WindowId};
 pub struct App {
     state: Option<State>,
     input: InputState,
-    clock: Clock,
+    last_frame: Instant,
     framerate_logger: FramerateLogger,
 }
 
@@ -18,7 +19,7 @@ impl App {
         Self {
             state: None,
             input: InputState::new(),
-            clock: Clock::new(),
+            last_frame: Instant::now(),
             framerate_logger: FramerateLogger::new(),
         }
     }
@@ -35,16 +36,15 @@ impl ApplicationHandler for App {
         if self.state.is_some() {
             return;
         }
-        #[allow(unused_mut)]
-        let mut window_attributes = Window::default_attributes();
         let window = Arc::new(
             event_loop
-                .create_window(window_attributes)
+                .create_window(Window::default_attributes())
                 .expect("failed to create window"),
         );
         let state =
             pollster::block_on(State::new(window.clone())).expect("should block on state creation");
         window.request_redraw();
+        self.last_frame = Instant::now();
         self.state = Some(state);
     }
 
@@ -58,25 +58,23 @@ impl ApplicationHandler for App {
         _window_id: WindowId,
         event: WindowEvent,
     ) {
-        let state = match &mut self.state {
-            Some(state) => state,
-            None => return,
+        let Some(state) = &mut self.state else {
+            return;
         };
 
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => state.resize(size.width, size.height),
             WindowEvent::RedrawRequested => {
-                let dt = self.clock.tick();
+                let now = Instant::now();
+                let dt = now - self.last_frame;
+                self.last_frame = now;
                 self.framerate_logger.tick();
                 state.update(dt, &self.input);
                 self.input.clear_frame_deltas();
-                match state.render() {
-                    Ok(_) => {}
-                    Err(e) => {
-                        log::error!("{e}");
-                        event_loop.exit();
-                    }
+                if let Err(e) = state.render() {
+                    log::error!("{e}");
+                    event_loop.exit();
                 }
             }
             WindowEvent::CursorMoved { position, .. } => {

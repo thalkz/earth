@@ -47,6 +47,30 @@ pub struct DdsPixelFormat {
     pub a_bit_mask: u32,
 }
 
+impl DdsPixelFormat {
+    const RGBA8: Self = Self {
+        size: 32,
+        flags: DDPF_RGB | DDPF_ALPHAPIXELS,
+        four_cc: 0,
+        rgb_bit_count: 32,
+        r_bit_mask: 0x0000_00FF,
+        g_bit_mask: 0x0000_FF00,
+        b_bit_mask: 0x00FF_0000,
+        a_bit_mask: 0xFF00_0000,
+    };
+
+    const DXT1: Self = Self {
+        size: 32,
+        flags: DDPF_FOURCC,
+        four_cc: u32::from_le_bytes(*b"DXT1"),
+        rgb_bit_count: 0,
+        r_bit_mask: 0,
+        g_bit_mask: 0,
+        b_bit_mask: 0,
+        a_bit_mask: 0,
+    };
+}
+
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct DdsHeader {
@@ -67,9 +91,17 @@ pub struct DdsHeader {
 }
 
 impl DdsHeader {
-    pub fn new_rgba8_2d(width: u32, height: u32, mipmap_count: u32) -> Self {
-        let mut flags = DDSD_CAPS | DDSD_HEIGHT | DDSD_WIDTH | DDSD_PITCH | DDSD_PIXELFORMAT;
-        let mut caps = DDSCAPS_TEXTURE;
+    fn build(
+        width: u32,
+        height: u32,
+        mipmap_count: u32,
+        pitch_or_linear_size: u32,
+        size_flag: u32,
+        pixel_format: DdsPixelFormat,
+        is_cubemap: bool,
+    ) -> Self {
+        let mut flags = DDSD_CAPS | DDSD_HEIGHT | DDSD_WIDTH | DDSD_PIXELFORMAT | size_flag;
+        let mut caps = DDSCAPS_TEXTURE | if is_cubemap { DDSCAPS_COMPLEX } else { 0 };
         if mipmap_count > 1 {
             flags |= DDSD_MIPMAPCOUNT;
             caps |= DDSCAPS_COMPLEX | DDSCAPS_MIPMAP;
@@ -80,98 +112,54 @@ impl DdsHeader {
             flags,
             height,
             width,
-            pitch_or_linear_size: width * 4,
+            pitch_or_linear_size,
             depth: 1,
             mipmap_count,
             reserved1: [0; 11],
-            pixel_format: DdsPixelFormat {
-                size: 32,
-                flags: DDPF_RGB | DDPF_ALPHAPIXELS,
-                four_cc: 0,
-                rgb_bit_count: 32,
-                r_bit_mask: 0x0000_00FF,
-                g_bit_mask: 0x0000_FF00,
-                b_bit_mask: 0x00FF_0000,
-                a_bit_mask: 0xFF00_0000,
-            },
+            pixel_format,
             caps,
-            caps2: 0,
+            caps2: if is_cubemap { DDSCAPS2_CUBEMAP_ALLFACES } else { 0 },
             caps3: 0,
             caps4: 0,
             reserved2: 0,
         }
+    }
+
+    pub fn new_rgba8_2d(width: u32, height: u32, mipmap_count: u32) -> Self {
+        Self::build(
+            width,
+            height,
+            mipmap_count,
+            width * 4,
+            DDSD_PITCH,
+            DdsPixelFormat::RGBA8,
+            false,
+        )
     }
 
     pub fn new_rgba8_cubemap(face_size: u32, mipmap_count: u32) -> Self {
-        let mut flags = DDSD_CAPS | DDSD_HEIGHT | DDSD_WIDTH | DDSD_PITCH | DDSD_PIXELFORMAT;
-        let mut caps = DDSCAPS_TEXTURE | DDSCAPS_COMPLEX;
-        if mipmap_count > 1 {
-            flags |= DDSD_MIPMAPCOUNT;
-            caps |= DDSCAPS_MIPMAP;
-        }
-
-        Self {
-            size: 124,
-            flags,
-            height: face_size,
-            width: face_size,
-            pitch_or_linear_size: face_size * 4,
-            depth: 1,
+        Self::build(
+            face_size,
+            face_size,
             mipmap_count,
-            reserved1: [0; 11],
-            pixel_format: DdsPixelFormat {
-                size: 32,
-                flags: DDPF_RGB | DDPF_ALPHAPIXELS,
-                four_cc: 0,
-                rgb_bit_count: 32,
-                r_bit_mask: 0x0000_00FF,
-                g_bit_mask: 0x0000_FF00,
-                b_bit_mask: 0x00FF_0000,
-                a_bit_mask: 0xFF00_0000,
-            },
-            caps,
-            caps2: DDSCAPS2_CUBEMAP_ALLFACES,
-            caps3: 0,
-            caps4: 0,
-            reserved2: 0,
-        }
+            face_size * 4,
+            DDSD_PITCH,
+            DdsPixelFormat::RGBA8,
+            true,
+        )
     }
 
     pub fn new_bc1_cubemap(face_size: u32, mipmap_count: u32) -> Self {
-        let mut flags = DDSD_CAPS | DDSD_HEIGHT | DDSD_WIDTH | DDSD_PIXELFORMAT | DDSD_LINEARSIZE;
-        let mut caps = DDSCAPS_TEXTURE | DDSCAPS_COMPLEX;
-        if mipmap_count > 1 {
-            flags |= DDSD_MIPMAPCOUNT;
-            caps |= DDSCAPS_MIPMAP;
-        }
-        let blocks = ((face_size + 3) / 4).max(1);
-        let linear_size = blocks * blocks * 8;
-
-        Self {
-            size: 124,
-            flags,
-            height: face_size,
-            width: face_size,
-            pitch_or_linear_size: linear_size,
-            depth: 1,
+        let blocks = face_size.div_ceil(4).max(1);
+        Self::build(
+            face_size,
+            face_size,
             mipmap_count,
-            reserved1: [0; 11],
-            pixel_format: DdsPixelFormat {
-                size: 32,
-                flags: DDPF_FOURCC,
-                four_cc: u32::from_le_bytes(*b"DXT1"),
-                rgb_bit_count: 0,
-                r_bit_mask: 0,
-                g_bit_mask: 0,
-                b_bit_mask: 0,
-                a_bit_mask: 0,
-            },
-            caps,
-            caps2: DDSCAPS2_CUBEMAP_ALLFACES,
-            caps3: 0,
-            caps4: 0,
-            reserved2: 0,
-        }
+            blocks * blocks * 8,
+            DDSD_LINEARSIZE,
+            DdsPixelFormat::DXT1,
+            true,
+        )
     }
 }
 
@@ -244,11 +232,11 @@ pub fn parse_dds(mut data: Vec<u8>) -> anyhow::Result<ImageAsset> {
         1
     };
 
-    let is_cube = header.caps2 & DDSCAPS2_CUBEMAP != 0;
-    if is_cube && width != height {
+    let is_cubemap = header.caps2 & DDSCAPS2_CUBEMAP != 0;
+    if is_cubemap && width != height {
         anyhow::bail!("Cubemap faces must be square, got {}x{}", width, height);
     }
-    let face_count: usize = if is_cube { 6 } else { 1 };
+    let face_count: usize = if is_cubemap { 6 } else { 1 };
 
     let mut mip_offsets = Vec::with_capacity(face_count * mip_count as usize);
     let mut current_offset = header_size;
@@ -257,15 +245,13 @@ pub fn parse_dds(mut data: Vec<u8>) -> anyhow::Result<ImageAsset> {
         let mut cur_w = width;
         let mut cur_h = height;
         for _ in 0..mip_count {
+            let blocks_x = cur_w.div_ceil(4).max(1) as usize;
+            let blocks_y = cur_h.div_ceil(4).max(1) as usize;
             let level_len = match format {
                 wgpu::TextureFormat::Bc1RgbaUnorm | wgpu::TextureFormat::Bc1RgbaUnormSrgb => {
-                    let blocks_x = ((cur_w + 3) / 4).max(1) as usize;
-                    let blocks_y = ((cur_h + 3) / 4).max(1) as usize;
                     blocks_x * blocks_y * 8
                 }
                 wgpu::TextureFormat::Bc7RgbaUnorm | wgpu::TextureFormat::Bc7RgbaUnormSrgb => {
-                    let blocks_x = ((cur_w + 3) / 4).max(1) as usize;
-                    let blocks_y = ((cur_h + 3) / 4).max(1) as usize;
                     blocks_x * blocks_y * 16
                 }
                 _ => (cur_w as usize) * (cur_h as usize) * 4,
@@ -288,10 +274,8 @@ pub fn parse_dds(mut data: Vec<u8>) -> anyhow::Result<ImageAsset> {
         );
     }
 
-    // Truncate any trailing padding without reallocating
     data.truncate(current_offset);
 
-    // If pixel order is BGRA, swizzle B and R to RGBA in-place
     if is_bgra {
         data[header_size..current_offset]
             .par_chunks_exact_mut(4)
@@ -300,23 +284,14 @@ pub fn parse_dds(mut data: Vec<u8>) -> anyhow::Result<ImageAsset> {
             });
     }
 
-    if is_cube {
-        Ok(ImageAsset::Cubemap {
-            width,
-            height,
-            format,
-            data,
-            mip_offsets,
-        })
-    } else {
-        Ok(ImageAsset::Texture2D {
-            width,
-            height,
-            format,
-            data,
-            mip_offsets,
-        })
-    }
+    Ok(ImageAsset {
+        width,
+        height,
+        format,
+        is_cubemap,
+        data,
+        mip_offsets,
+    })
 }
 
 #[cfg(test)]
@@ -329,20 +304,11 @@ mod tests {
         let path = "res/earth/diffuse_cube_4096x4096.dds";
         if let Ok(bytes) = fs::read(path) {
             let asset = parse_dds(bytes).expect("Should parse BC1 DDS");
-            let ImageAsset::Cubemap {
-                width,
-                height,
-                format,
-                mip_offsets,
-                ..
-            } = asset
-            else {
-                panic!("Expected ImageAsset::Cubemap");
-            };
-            assert_eq!(width, 4096);
-            assert_eq!(height, 4096);
-            assert_eq!(format, wgpu::TextureFormat::Bc1RgbaUnormSrgb);
-            assert_eq!(mip_offsets.len(), 6 * 8); // 6 faces * 8 mips
+            assert!(asset.is_cubemap);
+            assert_eq!(asset.width, 4096);
+            assert_eq!(asset.height, 4096);
+            assert_eq!(asset.format, wgpu::TextureFormat::Bc1RgbaUnormSrgb);
+            assert_eq!(asset.mip_offsets.len(), 6 * 8);
         }
     }
 
@@ -352,25 +318,14 @@ mod tests {
         let mut bytes = Vec::new();
         bytes.extend_from_slice(&DDS_MAGIC.to_le_bytes());
         bytes.extend_from_slice(bytemuck::bytes_of(&header));
-        // Mip 0: 4x4x4 = 64 bytes
         bytes.extend_from_slice(&[128u8; 64]);
-        // Mip 1: 2x2x4 = 16 bytes
         bytes.extend_from_slice(&[128u8; 16]);
 
         let asset = parse_dds(bytes).expect("Should parse 2D RGBA8 DDS");
-        let ImageAsset::Texture2D {
-            width,
-            height,
-            format,
-            mip_offsets,
-            ..
-        } = asset
-        else {
-            panic!("Expected ImageAsset::Texture2D");
-        };
-        assert_eq!(width, 4);
-        assert_eq!(height, 4);
-        assert_eq!(format, wgpu::TextureFormat::Rgba8Unorm);
-        assert_eq!(mip_offsets.len(), 2);
+        assert!(!asset.is_cubemap);
+        assert_eq!(asset.width, 4);
+        assert_eq!(asset.height, 4);
+        assert_eq!(asset.format, wgpu::TextureFormat::Rgba8Unorm);
+        assert_eq!(asset.mip_offsets.len(), 2);
     }
 }

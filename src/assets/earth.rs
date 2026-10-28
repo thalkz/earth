@@ -1,12 +1,9 @@
-use crate::assets::{self, ImageAsset, Material, Mesh, Model, Vertex};
+use crate::assets::{self, ImageAsset, Mesh, Model, Vertex};
 use glam::{Vec2, Vec3};
 use rayon::prelude::*;
 use std::ops::Range;
 
-#[allow(unused)]
 pub struct Earth {
-    pub resolution: usize,
-    pub subdivisions: usize,
     pub model: Model,
     pub elevation: ImageAsset,
     pub ocean: ImageAsset,
@@ -24,13 +21,14 @@ impl Earth {
         anyhow::ensure!(resolution >= 2, "resolution must be at least 2");
         anyhow::ensure!(subdivisions >= 1, "subdivisions must be at least 1");
 
-        let (((elevation, ocean), (water_normal_1, water_normal_2)), (meshes, materials)) =
+        let grid_res = resolution + 1;
+        let (((elevation, ocean), (water_normal_1, water_normal_2)), ((meshes, indices, lod_ranges), diffuse)) =
             rayon::join(
                 || {
                     rayon::join(
                         || {
                             rayon::join(
-                                || create_elevation(elevation_filename),
+                                || assets::load_dds_image(elevation_filename),
                                 || assets::load_dds_image("earth/ocean_cube_1024x1024.dds"),
                             )
                         },
@@ -44,82 +42,52 @@ impl Earth {
                 },
                 || {
                     rayon::join(
-                        || create_meshes(resolution + 1, subdivisions),
-                        || create_material(diffuse_filename),
+                        || create_meshes(grid_res, subdivisions),
+                        || assets::load_dds_image(diffuse_filename),
                     )
                 },
             );
 
-        let elevation = elevation?;
-        let ocean = ocean?;
-        let water_normal_1 = water_normal_1?;
-        let water_normal_2 = water_normal_2?;
-        let materials = materials?;
-
-        let result = Earth {
-            resolution: resolution + 1,
-            subdivisions,
-            elevation,
-            ocean,
-            water_normal_1,
-            water_normal_2,
-            model: Model { meshes, materials },
-        };
-        Ok(result)
+        Ok(Earth {
+            elevation: elevation?,
+            ocean: ocean?,
+            water_normal_1: water_normal_1?,
+            water_normal_2: water_normal_2?,
+            model: Model {
+                meshes,
+                indices,
+                lod_ranges,
+                diffuse: diffuse?,
+            },
+        })
     }
 }
 
-fn create_elevation(filename: &str) -> anyhow::Result<ImageAsset> {
-    let elevation_image: ImageAsset = assets::load_dds_image(filename)?;
-    Ok(elevation_image)
-}
+fn create_meshes(resolution: usize, subdivisions: usize) -> (Vec<Mesh>, Vec<u32>, [Range<u32>; 4]) {
+    let (indices, lod_ranges) = generate_patch_indices(resolution);
 
-fn create_material(filename: &str) -> anyhow::Result<Vec<Material>> {
-    let diffuse: ImageAsset = assets::load_dds_image(filename)?;
-    Ok(vec![Material {
-        name: "earth_elevation".to_string(),
-        diffuse,
-    }])
-}
-
-fn create_meshes(resolution: usize, subdivisions: usize) -> Vec<Mesh> {
-    let (shared_indices, lod_ranges) = generate_patch_indices(resolution);
-
-    CUBE_FACE_NORMALS
+    let meshes = CUBE_FACE_NORMALS
         .par_iter()
         .flat_map(|&normal| {
-            let shared_indices = &shared_indices;
-            let lod_ranges = &lod_ranges;
             (0..subdivisions).into_par_iter().flat_map(move |part_y| {
-                (0..subdivisions).into_par_iter().map(move |part_x| {
-                    create_face_part(
-                        normal,
-                        part_x,
-                        part_y,
-                        subdivisions,
-                        resolution,
-                        0,
-                        shared_indices.clone(),
-                        lod_ranges.clone(),
-                    )
-                })
+                (0..subdivisions)
+                    .into_par_iter()
+                    .map(move |part_x| create_face_part(normal, part_x, part_y, subdivisions, resolution))
             })
         })
-        .collect()
+        .collect();
+
+    (meshes, indices, lod_ranges)
 }
 
-fn generate_patch_indices(resolution: usize) -> (Vec<u32>, Vec<Range<u32>>) {
+fn generate_patch_indices(resolution: usize) -> (Vec<u32>, [Range<u32>; 4]) {
     let mut all_indices = Vec::new();
-    let mut lod_ranges = Vec::with_capacity(4);
-
-    // LOD 0 (step 1), LOD 1 (step 2), LOD 2 (step 4), LOD 3 (step 8)
-    for step in [1, 2, 4, 8] {
+    let lod_ranges = [1, 2, 4, 8].map(|step| {
         let start = all_indices.len() as u32;
-        let lod_indices = generate_lod_indices(resolution, step);
-        all_indices.extend(lod_indices);
+        all_indices.extend(generate_lod_indices(resolution, step));
         let end = all_indices.len() as u32;
-        lod_ranges.push(start..end);
-    }
+        start..end
+    });
 
     (all_indices, lod_ranges)
 }
@@ -130,9 +98,6 @@ fn create_face_part(
     part_y: usize,
     subdivisions: usize,
     resolution: usize,
-    material_index: usize,
-    indices: Vec<u32>,
-    lod_ranges: Vec<Range<u32>>,
 ) -> Mesh {
     let axis_u = Vec3::new(normal.y, normal.z, normal.x);
     let axis_v = normal.cross(axis_u);
@@ -145,9 +110,8 @@ fn create_face_part(
         for x in 0..resolution {
             let local_t = Vec2::new(x as f32, y as f32) / (resolution - 1) as f32;
             let t = (Vec2::new(part_x as f32, part_y as f32) + local_t) / subdivisions as f32;
-            let sphere_pos = to_sphere_point(to_cube(t));
             vertices.push(Vertex {
-                position: sphere_pos.into(),
+                position: to_sphere_point(to_cube(t)),
             });
         }
     }
@@ -163,18 +127,12 @@ fn create_face_part(
 
     let skirt_vertices: Vec<Vertex> = skirt_indices
         .map(|idx| Vertex {
-            position: (Vec3::from(vertices[idx].position) * SKIRT_RADIUS_SCALE).into(),
+            position: vertices[idx].position * SKIRT_RADIUS_SCALE,
         })
         .collect();
     vertices.extend(skirt_vertices);
 
-    Mesh::with_lods(
-        format!("cube_face_{normal:?}_{part_x}_{part_y}"),
-        vertices,
-        indices,
-        lod_ranges,
-        material_index,
-    )
+    Mesh { vertices }
 }
 
 fn generate_lod_indices(resolution: usize, step: usize) -> Vec<u32> {

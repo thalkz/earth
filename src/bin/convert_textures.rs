@@ -1,4 +1,4 @@
-use earth::{DDS_MAGIC, DdsHeader, ImageAsset, parse_dds};
+use earth::{DDS_MAGIC, DdsHeader, parse_dds};
 use glam::Vec3;
 use rayon::prelude::*;
 use std::f32::consts::PI;
@@ -7,49 +7,11 @@ use std::io::Write;
 use std::path::Path;
 use std::time::Instant;
 
-fn write_dds_2d<P: AsRef<Path>>(
-    path: P,
-    width: u32,
-    height: u32,
-    mip_levels: &[Vec<u8>],
-) -> std::io::Result<()> {
-    let header = DdsHeader::new_rgba8_2d(width, height, mip_levels.len() as u32);
+fn write_dds(path: &Path, header: &DdsHeader, mips: &[Vec<u8>]) -> std::io::Result<()> {
     let mut file = File::create(path)?;
     file.write_all(&DDS_MAGIC.to_le_bytes())?;
-    file.write_all(bytemuck::bytes_of(&header))?;
-    for level in mip_levels {
-        file.write_all(level)?;
-    }
-    Ok(())
-}
-
-fn write_dds_cubemap<P: AsRef<Path>>(
-    path: P,
-    face_size: u32,
-    mip_levels_all_faces: &[Vec<u8>], // Total count: 6 * mip_count
-) -> std::io::Result<()> {
-    let mip_count_per_face = (mip_levels_all_faces.len() / 6) as u32;
-    let header = DdsHeader::new_rgba8_cubemap(face_size, mip_count_per_face);
-    let mut file = File::create(path)?;
-    file.write_all(&DDS_MAGIC.to_le_bytes())?;
-    file.write_all(bytemuck::bytes_of(&header))?;
-    for level in mip_levels_all_faces {
-        file.write_all(level)?;
-    }
-    Ok(())
-}
-
-fn write_dds_bc1_cubemap<P: AsRef<Path>>(
-    path: P,
-    face_size: u32,
-    mip_levels_all_faces: &[Vec<u8>],
-) -> std::io::Result<()> {
-    let mip_count_per_face = (mip_levels_all_faces.len() / 6) as u32;
-    let header = DdsHeader::new_bc1_cubemap(face_size, mip_count_per_face);
-    let mut file = File::create(path)?;
-    file.write_all(&DDS_MAGIC.to_le_bytes())?;
-    file.write_all(bytemuck::bytes_of(&header))?;
-    for level in mip_levels_all_faces {
+    file.write_all(bytemuck::bytes_of(header))?;
+    for level in mips {
         file.write_all(level)?;
     }
     Ok(())
@@ -74,7 +36,6 @@ fn from_rgb565(c: u16) -> [i32; 3] {
 }
 
 fn encode_bc1_block(block_pixels: &[[u8; 3]; 16]) -> [u8; 8] {
-    // Find the pair of pixels with maximum perceptual distance
     let mut max_dist = -1i32;
     let mut p_min = block_pixels[0];
     let mut p_max = block_pixels[0];
@@ -125,10 +86,10 @@ fn encode_bc1_block(block_pixels: &[[u8; 3]; 16]) -> [u8; 8] {
         let mut best_idx = 0u32;
         let p_i = [p[0] as i32, p[1] as i32, p[2] as i32];
 
-        for k in 0..num_colors {
-            let dr = p_i[0] - pal[k][0];
-            let dg = p_i[1] - pal[k][1];
-            let db = p_i[2] - pal[k][2];
+        for (k, pal_k) in pal.iter().enumerate().take(num_colors) {
+            let dr = p_i[0] - pal_k[0];
+            let dg = p_i[1] - pal_k[1];
+            let db = p_i[2] - pal_k[2];
             let dist = 3 * dr * dr + 4 * dg * dg + 2 * db * db;
             if dist < best_dist {
                 best_dist = dist;
@@ -146,8 +107,8 @@ fn encode_bc1_block(block_pixels: &[[u8; 3]; 16]) -> [u8; 8] {
 }
 
 fn compress_rgba8_to_bc1(rgba: &[u8], width: u32, height: u32) -> Vec<u8> {
-    let blocks_x = ((width + 3) / 4).max(1) as usize;
-    let blocks_y = ((height + 3) / 4).max(1) as usize;
+    let blocks_x = width.div_ceil(4).max(1) as usize;
+    let blocks_y = height.div_ceil(4).max(1) as usize;
     let mut out = vec![0u8; blocks_x * blocks_y * 8];
 
     out.par_chunks_exact_mut(blocks_x * 8)
@@ -172,7 +133,6 @@ fn compress_rgba8_to_bc1(rgba: &[u8], width: u32, height: u32) -> Vec<u8> {
 }
 
 fn cube_uv_to_direction(face: usize, u: f32, v: f32) -> Vec3 {
-    // Face convention matching standard DirectX/wgpu Cubemap:
     // 0: +X, 1: -X, 2: +Y, 3: -Y, 4: +Z, 5: -Z
     match face {
         0 => Vec3::new(1.0, -v, -u),
@@ -246,8 +206,8 @@ fn generate_mipmaps_diffuse(level0: Vec<u8>, width: u32, height: u32) -> Vec<Vec
     mips
 }
 
-fn generate_mipmaps_normal_elevation(
-    face: usize,
+fn generate_mipmaps_normals(
+    face: Option<usize>,
     level0: Vec<u8>,
     width: u32,
     height: u32,
@@ -288,29 +248,33 @@ fn generate_mipmaps_normal_elevation(
                         )
                     };
 
-                    let n00 = unpack_normal(p00_idx);
-                    let n10 = unpack_normal(p10_idx);
-                    let n01 = unpack_normal(p01_idx);
-                    let n11 = unpack_normal(p11_idx);
-
-                    let v_sum = n00 + n10 + n01 + n11;
+                    let v_sum = unpack_normal(p00_idx)
+                        + unpack_normal(p10_idx)
+                        + unpack_normal(p01_idx)
+                        + unpack_normal(p11_idx);
                     let normal = if v_sum.length_squared() > 1e-12 {
                         v_sum.normalize()
-                    } else {
+                    } else if let Some(face_idx) = face {
                         let u = ((dx as f32 + 0.5) / dst_w as f32) * 2.0 - 1.0;
                         let v = ((dy as f32 + 0.5) / dst_h as f32) * 2.0 - 1.0;
-                        cube_uv_to_direction(face, u, v)
+                        cube_uv_to_direction(face_idx, u, v)
+                    } else {
+                        Vec3::Z
                     };
 
                     let nx = (normal.x * 0.5 + 0.5).clamp(0.0, 1.0);
                     let ny = (normal.y * 0.5 + 0.5).clamp(0.0, 1.0);
                     let nz = (normal.z * 0.5 + 0.5).clamp(0.0, 1.0);
 
-                    let a_sum = prev_level[p00_idx + 3] as u32
-                        + prev_level[p10_idx + 3] as u32
-                        + prev_level[p01_idx + 3] as u32
-                        + prev_level[p11_idx + 3] as u32;
-                    let avg_a = ((a_sum + 2) / 4) as u8;
+                    let avg_a = if face.is_some() {
+                        let a_sum = prev_level[p00_idx + 3] as u32
+                            + prev_level[p10_idx + 3] as u32
+                            + prev_level[p01_idx + 3] as u32
+                            + prev_level[p11_idx + 3] as u32;
+                        ((a_sum + 2) / 4) as u8
+                    } else {
+                        255
+                    };
 
                     let off = dx * 4;
                     row[off] = (nx * 255.0).round() as u8;
@@ -363,17 +327,16 @@ fn convert_gebco_textures(
     let stride = (face_size + 2) as usize; // 1-texel border around each face for seamless 3x3 Sobel normals
     let mut face_elevs = vec![vec![0.0f32; stride * stride]; 6];
 
-    // Process one hemisphere (4 tiles) at a time to keep peak RAM low while sampling native 86400x43200 GEBCO directly
-    for hemisphere_row in 0..2 {
+    for (hemisphere_row, row_tiles) in GEBCO_TILES.iter().enumerate() {
         let hemisphere_name = if hemisphere_row == 0 {
             "Northern"
         } else {
             "Southern"
         };
-        println!("Loading {} hemisphere GEBCO tiles in parallel...", hemisphere_name);
+        println!("Loading {hemisphere_name} hemisphere GEBCO tiles in parallel...");
         let hemi_start = Instant::now();
 
-        let hemisphere_tiles: Vec<(usize, usize, Vec<i16>)> = GEBCO_TILES[hemisphere_row]
+        let hemisphere_tiles: Vec<(usize, usize, Vec<i16>)> = row_tiles
             .par_iter()
             .map(|&filename| -> anyhow::Result<(usize, usize, Vec<i16>)> {
                 let tile_path = input_dir.join(filename);
@@ -387,10 +350,7 @@ fn convert_gebco_textures(
                     _ => anyhow::bail!("Expected I16 GEBCO data in {:?}", tile_path),
                 };
                 println!(
-                    "  Loaded {} ({}x{}) in {:?}",
-                    filename,
-                    sw_u32,
-                    sh_u32,
+                    "  Loaded {filename} ({sw_u32}x{sh_u32}) in {:?}",
                     tile_start.elapsed()
                 );
                 Ok((sw_u32 as usize, sh_u32 as usize, data))
@@ -454,16 +414,12 @@ fn convert_gebco_textures(
         }
 
         println!(
-            "{} hemisphere sampled directly into cubemap elevation grids in {:?}",
-            hemisphere_name,
+            "{hemisphere_name} hemisphere sampled directly into cubemap elevation grids in {:?}",
             hemi_start.elapsed()
         );
     }
 
-    println!(
-        "All GEBCO tiles sampled in {:?}.",
-        start.elapsed()
-    );
+    println!("All GEBCO tiles sampled in {:?}.", start.elapsed());
 
     if !elevation_output.exists() {
         let cube_start = Instant::now();
@@ -518,9 +474,7 @@ fn convert_gebco_textures(
                             let s_s = get_displaced(gx, gy + 1);
                             let s_se = get_displaced(gx + 1, gy + 1);
 
-                            // Sobel derivative along increasing u (left to right on face)
                             let d_u = (s_ne - s_nw) + (s_e - s_w) * 2.0 + (s_se - s_sw);
-                            // Sobel derivative along increasing v (top to bottom on face)
                             let d_v = (s_sw - s_nw) + (s_s - s_n) * 2.0 + (s_se - s_ne);
 
                             let n = d_v.cross(d_u);
@@ -544,8 +498,7 @@ fn convert_gebco_textures(
                     }
                 });
 
-            let face_mips =
-                generate_mipmaps_normal_elevation(face, face_bytes, face_size, face_size);
+            let face_mips = generate_mipmaps_normals(Some(face), face_bytes, face_size, face_size);
             all_cubemap_mips.extend(face_mips);
         }
 
@@ -554,14 +507,14 @@ fn convert_gebco_textures(
             cube_start.elapsed(),
             elevation_output
         );
-        write_dds_cubemap(elevation_output, face_size, &all_cubemap_mips)?;
+        let mip_count = (all_cubemap_mips.len() / 6) as u32;
+        let header = DdsHeader::new_rgba8_cubemap(face_size, mip_count);
+        write_dds(elevation_output, &header, &all_cubemap_mips)?;
 
         let total_bytes: usize = all_cubemap_mips.iter().map(|m| m.len()).sum();
         println!(
-            "Saved {:?} (6 faces of {}x{}, {} bytes total)",
+            "Saved {:?} (6 faces of {face_size}x{face_size}, {} bytes total)",
             elevation_output,
-            face_size,
-            face_size,
             total_bytes + 128
         );
     }
@@ -574,8 +527,8 @@ fn convert_gebco_textures(
         let mut all_ocean_mips = Vec::new();
 
         println!(
-            "Generating precomputed {}x{} ocean diffuse cubemap {:?}...",
-            ocean_size, ocean_size, ocean_output
+            "Generating precomputed {ocean_size}x{ocean_size} ocean diffuse cubemap {:?}...",
+            ocean_output
         );
 
         for face_elev in &face_elevs {
@@ -590,7 +543,6 @@ fn convert_gebco_textures(
                             let gy = oy * downsample_factor + dy + 1;
                             for dx in 0..downsample_factor {
                                 let gx = ox * downsample_factor + dx + 1;
-                                // Clamp land elevations (> 0) to 0.0 so coastlines blend smoothly with shallow water
                                 depth_sum += face_elev[gy * stride + gx].min(0.0);
                             }
                         }
@@ -611,13 +563,13 @@ fn convert_gebco_textures(
             all_ocean_mips.extend(face_mips);
         }
 
-        write_dds_cubemap(ocean_output, ocean_size, &all_ocean_mips)?;
+        let mip_count = (all_ocean_mips.len() / 6) as u32;
+        let header = DdsHeader::new_rgba8_cubemap(ocean_size, mip_count);
+        write_dds(ocean_output, &header, &all_ocean_mips)?;
         let total_bytes: usize = all_ocean_mips.iter().map(|m| m.len()).sum();
         println!(
-            "Saved {:?} (6 faces of {}x{}, {} bytes total) in {:?}",
+            "Saved {:?} (6 faces of {ocean_size}x{ocean_size}, {} bytes total) in {:?}",
             ocean_output,
-            ocean_size,
-            ocean_size,
             total_bytes + 128,
             ocean_start.elapsed()
         );
@@ -704,86 +656,19 @@ fn convert_image_to_bc1(input_path: &Path, output_dds: &Path) -> anyhow::Result<
         cube_start.elapsed(),
         output_dds
     );
-    write_dds_bc1_cubemap(output_dds, face_size, &all_cubemap_mips)?;
+    let mip_count = (all_cubemap_mips.len() / 6) as u32;
+    let header = DdsHeader::new_bc1_cubemap(face_size, mip_count);
+    write_dds(output_dds, &header, &all_cubemap_mips)?;
 
     let total_bytes: usize = all_cubemap_mips.iter().map(|m| m.len()).sum();
     println!(
-        "Done in {:?}! Saved {:?} (6 faces of {}x{}, {} bytes total)",
+        "Done in {:?}! Saved {:?} (6 faces of {face_size}x{face_size}, {} bytes total)",
         start.elapsed(),
         output_dds,
-        face_size,
-        face_size,
         total_bytes + 128
     );
 
     Ok(())
-}
-
-fn generate_mipmaps_normal_2d(level0: Vec<u8>, width: u32, height: u32) -> Vec<Vec<u8>> {
-    let mip_count = compute_mip_count(width, height);
-    let mut mips = Vec::with_capacity(mip_count as usize);
-    let mut prev_w = width as usize;
-    let mut prev_h = height as usize;
-    mips.push(level0);
-
-    for _ in 1..mip_count {
-        let dst_w = (prev_w / 2).max(1);
-        let dst_h = (prev_h / 2).max(1);
-        let prev_level = mips.last().unwrap();
-
-        let mut next_level = vec![0u8; dst_w * dst_h * 4];
-        next_level
-            .par_chunks_exact_mut(dst_w * 4)
-            .enumerate()
-            .for_each(|(dy, row)| {
-                let sy0 = dy * 2;
-                let sy1 = (sy0 + 1).min(prev_h - 1);
-
-                for dx in 0..dst_w {
-                    let sx0 = dx * 2;
-                    let sx1 = (sx0 + 1).min(prev_w - 1);
-
-                    let p00_idx = (sy0 * prev_w + sx0) * 4;
-                    let p10_idx = (sy0 * prev_w + sx1) * 4;
-                    let p01_idx = (sy1 * prev_w + sx0) * 4;
-                    let p11_idx = (sy1 * prev_w + sx1) * 4;
-
-                    let unpack_normal = |idx: usize| -> Vec3 {
-                        Vec3::new(
-                            (prev_level[idx] as f32 / 255.0) * 2.0 - 1.0,
-                            (prev_level[idx + 1] as f32 / 255.0) * 2.0 - 1.0,
-                            (prev_level[idx + 2] as f32 / 255.0) * 2.0 - 1.0,
-                        )
-                    };
-
-                    let v_sum = unpack_normal(p00_idx)
-                        + unpack_normal(p10_idx)
-                        + unpack_normal(p01_idx)
-                        + unpack_normal(p11_idx);
-                    let normal = if v_sum.length_squared() > 1e-12 {
-                        v_sum.normalize()
-                    } else {
-                        Vec3::Z
-                    };
-
-                    let nx = (normal.x * 0.5 + 0.5).clamp(0.0, 1.0);
-                    let ny = (normal.y * 0.5 + 0.5).clamp(0.0, 1.0);
-                    let nz = (normal.z * 0.5 + 0.5).clamp(0.0, 1.0);
-
-                    let off = dx * 4;
-                    row[off] = (nx * 255.0).round() as u8;
-                    row[off + 1] = (ny * 255.0).round() as u8;
-                    row[off + 2] = (nz * 255.0).round() as u8;
-                    row[off + 3] = 255;
-                }
-            });
-
-        mips.push(next_level);
-        prev_w = dst_w;
-        prev_h = dst_h;
-    }
-
-    mips
 }
 
 fn generate_or_convert_water_normal(
@@ -801,9 +686,10 @@ fn generate_or_convert_water_normal(
             reader.no_limits();
             let img = reader.decode()?.to_rgba8();
             let (w, h) = img.dimensions();
-            let mips = generate_mipmaps_normal_2d(img.into_raw(), w, h);
-            write_dds_2d(output_dds, w, h, &mips)?;
-            println!("Saved {:?} ({}x{}) in {:?}", output_dds, w, h, start.elapsed());
+            let mips = generate_mipmaps_normals(None, img.into_raw(), w, h);
+            let header = DdsHeader::new_rgba8_2d(w, h, mips.len() as u32);
+            write_dds(output_dds, &header, &mips)?;
+            println!("Saved {:?} ({w}x{h}) in {:?}", output_dds, start.elapsed());
             return Ok(());
         }
     }
@@ -811,11 +697,10 @@ fn generate_or_convert_water_normal(
     const WATER_NORMAL_SIZE: u32 = 512;
     let size = WATER_NORMAL_SIZE as usize;
     println!(
-        "Generating seamless {}x{} ocean wave normal map {:?} (seed={})...",
-        size, size, output_dds, seed
+        "Generating seamless {size}x{size} ocean wave normal map {:?} (seed={seed})...",
+        output_dds
     );
 
-    // Deterministic pseudo-random helper for wave spectrum generation
     let hash_f32 = |mut x: u32| -> f32 {
         x = ((x >> 16) ^ x).wrapping_mul(0x45d9f3b);
         x = ((x >> 16) ^ x).wrapping_mul(0x45d9f3b);
@@ -823,7 +708,6 @@ fn generate_or_convert_water_normal(
         (x as f32) / (u32::MAX as f32)
     };
 
-    // Build 48 periodic wave components with integer wavevectors (kx, ky) for exact toroidal tiling
     struct WaveMode {
         kx: f32,
         ky: f32,
@@ -835,7 +719,7 @@ fn generate_or_convert_water_normal(
     let mut modes = Vec::with_capacity(48);
     for i in 0..48u32 {
         let s = seed.wrapping_mul(7919).wrapping_add(i.wrapping_mul(104729));
-        let band = i / 12; // 0: broad swells, 1: medium waves, 2: chop, 3: capillary ripples
+        let band = i / 12;
         let (min_k, max_k, base_amp) = match band {
             0 => (2.0f32, 6.0f32, 0.28f32),
             1 => (6.0f32, 14.0f32, 0.14f32),
@@ -851,7 +735,8 @@ fn generate_or_convert_water_normal(
             kx = 2.0;
         }
         let actual_k = (kx * kx + ky * ky).sqrt();
-        let amp = base_amp * (min_k / actual_k).powf(0.85) * (0.7 + 0.6 * hash_f32(s.wrapping_add(2)));
+        let amp =
+            base_amp * (min_k / actual_k).powf(0.85) * (0.7 + 0.6 * hash_f32(s.wrapping_add(2)));
         let phase = hash_f32(s.wrapping_add(3)) * 2.0 * PI;
         let steepness = 0.25 + 0.2 * hash_f32(s.wrapping_add(4));
 
@@ -877,7 +762,6 @@ fn generate_or_convert_water_normal(
 
                 for m in &modes {
                     let theta = m.kx * u + m.ky * v + m.phase;
-                    // Trochoidal / steepened wave profile: h(theta) = amp * sin(theta + steepness * sin(theta))
                     let warped = theta + m.steepness * theta.sin();
                     let d_warped = warped.cos() * (1.0 + m.steepness * theta.cos());
                     dh_du += m.amp * m.kx * d_warped;
@@ -885,7 +769,8 @@ fn generate_or_convert_water_normal(
                 }
 
                 let slope_scale = 0.12f32;
-                let normal = Vec3::new(-dh_du * slope_scale, -dh_dv * slope_scale, 1.0).normalize();
+                let normal =
+                    Vec3::new(-dh_du * slope_scale, -dh_dv * slope_scale, 1.0).normalize();
 
                 let nx = (normal.x * 0.5 + 0.5).clamp(0.0, 1.0);
                 let ny = (normal.y * 0.5 + 0.5).clamp(0.0, 1.0);
@@ -899,14 +784,13 @@ fn generate_or_convert_water_normal(
             }
         });
 
-    let mips = generate_mipmaps_normal_2d(rgba, WATER_NORMAL_SIZE, WATER_NORMAL_SIZE);
-    write_dds_2d(output_dds, WATER_NORMAL_SIZE, WATER_NORMAL_SIZE, &mips)?;
+    let mips = generate_mipmaps_normals(None, rgba, WATER_NORMAL_SIZE, WATER_NORMAL_SIZE);
+    let header = DdsHeader::new_rgba8_2d(WATER_NORMAL_SIZE, WATER_NORMAL_SIZE, mips.len() as u32);
+    write_dds(output_dds, &header, &mips)?;
     println!(
-        "Done in {:?}! Saved {:?} ({}x{}, {} mip levels)",
+        "Done in {:?}! Saved {:?} ({WATER_NORMAL_SIZE}x{WATER_NORMAL_SIZE}, {} mip levels)",
         start.elapsed(),
         output_dds,
-        WATER_NORMAL_SIZE,
-        WATER_NORMAL_SIZE,
         mips.len()
     );
 
@@ -924,18 +808,17 @@ fn extract_downsampled_dds(
     is_bc1: bool,
 ) -> anyhow::Result<()> {
     println!(
-        "Extracting {}x{} mobile DDS from {:?} -> {:?}...",
-        target_face_size, target_face_size, src_dds, dst_dds
+        "Extracting {target_face_size}x{target_face_size} mobile DDS from {:?} -> {:?}...",
+        src_dds, dst_dds
     );
     if let Some(parent) = dst_dds.parent() {
         fs::create_dir_all(parent)?;
     }
     let bytes = fs::read(src_dds)?;
     let asset = parse_dds(bytes)?;
-    let ImageAsset::Cubemap { width, .. } = &asset else {
-        anyhow::bail!("Expected cubemap DDS in {:?}", src_dds);
-    };
-    let skip_mips = (*width / target_face_size).ilog2() as usize;
+    anyhow::ensure!(asset.is_cubemap, "Expected cubemap DDS in {:?}", src_dds);
+
+    let skip_mips = (asset.width / target_face_size).ilog2() as usize;
     let all_mips: Vec<&[u8]> = asset.mip_levels().collect();
     let mips_per_face = all_mips.len() / 6;
 
@@ -946,25 +829,25 @@ fn extract_downsampled_dds(
         }
     }
 
-    if is_bc1 {
-        write_dds_bc1_cubemap(dst_dds, target_face_size, &extracted_mips)?;
+    let mip_count = (extracted_mips.len() / 6) as u32;
+    let header = if is_bc1 {
+        DdsHeader::new_bc1_cubemap(target_face_size, mip_count)
     } else {
-        write_dds_cubemap(dst_dds, target_face_size, &extracted_mips)?;
-    }
+        DdsHeader::new_rgba8_cubemap(target_face_size, mip_count)
+    };
+    write_dds(dst_dds, &header, &extracted_mips)?;
     Ok(())
 }
 
 fn main() -> anyhow::Result<()> {
     let elevation_input = Path::new("res/in/gebco_2026_geotiff");
     let elevation_output_str = format!(
-        "res/earth/elevation_cube_{}x{}.dds",
-        CUBE_FACE_SIZE, CUBE_FACE_SIZE
+        "res/earth/elevation_cube_{CUBE_FACE_SIZE}x{CUBE_FACE_SIZE}.dds"
     );
     let elevation_output = Path::new(&elevation_output_str);
 
     let ocean_output_str = format!(
-        "res/earth/ocean_cube_{}x{}.dds",
-        OCEAN_CUBE_FACE_SIZE, OCEAN_CUBE_FACE_SIZE
+        "res/earth/ocean_cube_{OCEAN_CUBE_FACE_SIZE}x{OCEAN_CUBE_FACE_SIZE}.dds"
     );
     let ocean_output = Path::new(&ocean_output_str);
 
@@ -973,29 +856,28 @@ fn main() -> anyhow::Result<()> {
     } else if elevation_output.exists() && ocean_output.exists() {
         println!(
             "{} and {} already exist, skipping GEBCO conversion",
-            elevation_output.to_str().unwrap(),
-            ocean_output.to_str().unwrap()
+            elevation_output.display(),
+            ocean_output.display()
         );
     } else {
-        println!("{} is missing", elevation_input.to_str().unwrap());
+        println!("{} is missing", elevation_input.display());
     }
 
     let diffuse_input = Path::new("res/in/diffuse.tif");
-    let diffuse_output = &format!(
-        "res/earth/diffuse_cube_{}x{}.dds",
-        CUBE_FACE_SIZE, CUBE_FACE_SIZE
+    let diffuse_output_str = format!(
+        "res/earth/diffuse_cube_{CUBE_FACE_SIZE}x{CUBE_FACE_SIZE}.dds"
     );
-    let diffuse_output = Path::new(&diffuse_output);
+    let diffuse_output = Path::new(&diffuse_output_str);
 
     if diffuse_input.exists() && !diffuse_output.exists() {
         convert_image_to_bc1(diffuse_input, diffuse_output)?;
     } else if diffuse_output.exists() {
         println!(
             "{} already exists, skipping diffuse conversion",
-            diffuse_output.to_str().unwrap()
+            diffuse_output.display()
         );
     } else {
-        println!("{} is missing", diffuse_input.to_str().unwrap());
+        println!("{} is missing", diffuse_input.display());
     }
 
     let water_normal_1_output = Path::new("res/earth/water_normal_1.dds");
@@ -1008,7 +890,7 @@ fn main() -> anyhow::Result<()> {
     } else {
         println!(
             "{} already exists, skipping water_normal_1 generation",
-            water_normal_1_output.to_str().unwrap()
+            water_normal_1_output.display()
         );
     }
 
@@ -1022,7 +904,7 @@ fn main() -> anyhow::Result<()> {
     } else {
         println!(
             "{} already exists, skipping water_normal_2 generation",
-            water_normal_2_output.to_str().unwrap()
+            water_normal_2_output.display()
         );
     }
 

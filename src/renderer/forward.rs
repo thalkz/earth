@@ -88,7 +88,7 @@ impl ForwardPass {
     pub fn draw<'a>(
         &'a self,
         render_pass: &mut RenderPass<'a>,
-        render_earth: &RenderModel,
+        render_earth: &'a RenderModel,
         visible_meshes: &[VisibleMesh],
         camera_bind_group: &'a BindGroup,
         light_bind_group: &'a BindGroup,
@@ -98,14 +98,13 @@ impl ForwardPass {
         render_pass.set_bind_group(0, camera_bind_group, &[]);
         render_pass.set_bind_group(1, light_bind_group, &[]);
         render_pass.set_bind_group(2, elevation_bind_group, &[]);
+        render_pass.set_bind_group(3, &render_earth.diffuse_bind_group, &[]);
         render_pass.set_index_buffer(render_earth.index_buffer.slice(..), IndexFormat::Uint32);
 
         for visible in visible_meshes {
             let mesh = &render_earth.meshes[visible.mesh_index];
-            let material = &render_earth.materials[mesh.material_index];
-            let range = mesh.lod_range(visible.lod);
+            let range = render_earth.lod_range(visible.lod);
             render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
-            render_pass.set_bind_group(3, &material.bind_group, &[]);
             render_pass.draw_indexed(range, 0, 0..1);
         }
     }

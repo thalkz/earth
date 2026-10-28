@@ -1,5 +1,4 @@
-use glam::{Vec2, Vec3};
-use std::f32::consts::PI;
+use glam::Vec3;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LatLng {
@@ -9,18 +8,6 @@ pub struct LatLng {
 
 impl LatLng {
     pub fn new(lat: f32, lng: f32) -> LatLng {
-        LatLng { lat, lng }
-    }
-
-    pub fn to_uv(self) -> Vec2 {
-        let u = (self.lng / (2.0 * PI)) + 0.5;
-        let v = 0.5 - (self.lat / PI);
-        Vec2::new(1.0 - u, v)
-    }
-
-    pub fn from_uv(uv: Vec2) -> LatLng {
-        let lng = (uv.x - 0.5) * 2.0 * PI;
-        let lat = (0.5 - uv.y) * PI;
         LatLng { lat, lng }
     }
 }
@@ -35,10 +22,12 @@ impl From<Vec3> for LatLng {
 
 impl From<LatLng> for Vec3 {
     fn from(value: LatLng) -> Self {
-        let y = value.lat.sin();
-        let r = value.lat.cos();
-        let x = value.lng.sin() * r;
-        let z = -value.lng.cos() * r;
-        Self { x, y, z }
+        let (y, r) = value.lat.sin_cos();
+        let (sin_lng, cos_lng) = value.lng.sin_cos();
+        Self {
+            x: sin_lng * r,
+            y,
+            z: -cos_lng * r,
+        }
     }
 }

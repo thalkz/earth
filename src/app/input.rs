@@ -166,15 +166,15 @@ impl InputState {
 
                 // If 1 finger remains after a 2-finger gesture and purposefully drags > 35px,
                 // smoothly transition into a fresh 1-finger pan without jumping.
-                if self.touches.len() == 1 && self.multi_touch_latched {
-                    if let Some(t) = self.touches.values_mut().next() {
-                        if t.curr_pos.distance(t.start_pos) > 35.0 {
-                            self.multi_touch_latched = false;
-                            self.single_pan_just_started = true;
-                            t.start_pos = t.curr_pos;
-                            t.prev_pos = t.curr_pos;
-                        }
-                    }
+                if self.touches.len() == 1
+                    && self.multi_touch_latched
+                    && let Some(t) = self.touches.values_mut().next()
+                    && t.curr_pos.distance(t.start_pos) > 35.0
+                {
+                    self.multi_touch_latched = false;
+                    self.single_pan_just_started = true;
+                    t.start_pos = t.curr_pos;
+                    t.prev_pos = t.curr_pos;
                 }
             }
             TouchPhase::Ended | TouchPhase::Cancelled => {
@@ -183,15 +183,13 @@ impl InputState {
                 if self.touches.is_empty() {
                     if self.double_tap_active && !self.double_tap_moved {
                         self.pending_double_tap = Some(self.double_tap_anchor);
-                    } else if !self.multi_touch_latched && !self.double_tap_active {
-                        if let (Some(start_time), Some(pt)) = (self.single_touch_start_time, removed)
-                        {
-                            if now.duration_since(start_time).as_millis() < 260
-                                && pt.curr_pos.distance(pt.start_pos) < 30.0
-                            {
-                                self.last_single_tap = Some((now, pt.curr_pos));
-                            }
-                        }
+                    } else if !self.multi_touch_latched
+                        && !self.double_tap_active
+                        && let (Some(start_time), Some(pt)) = (self.single_touch_start_time, removed)
+                        && now.duration_since(start_time).as_millis() < 260
+                        && pt.curr_pos.distance(pt.start_pos) < 30.0
+                    {
+                        self.last_single_tap = Some((now, pt.curr_pos));
                     }
                     self.multi_touch_latched = false;
                     self.double_tap_active = false;

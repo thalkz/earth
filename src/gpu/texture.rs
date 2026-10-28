@@ -1,3 +1,4 @@
+use crate::assets::ImageAsset;
 use wgpu::{
     AddressMode, Device, Extent3d, Features, FilterMode, MipmapFilterMode, Origin3d, Queue,
     Sampler, SamplerDescriptor, SurfaceConfiguration, TexelCopyBufferLayout, TexelCopyTextureInfo,
@@ -14,11 +15,11 @@ pub struct Texture {
 impl Texture {
     pub const DEPTH_FORMAT: TextureFormat = TextureFormat::Depth32Float;
 
-    pub fn create_sampler(device: &Device) -> Sampler {
+    pub fn create_sampler(device: &Device, address_mode: AddressMode) -> Sampler {
         device.create_sampler(&SamplerDescriptor {
-            address_mode_u: AddressMode::ClampToEdge,
-            address_mode_v: AddressMode::ClampToEdge,
-            address_mode_w: AddressMode::ClampToEdge,
+            address_mode_u: address_mode,
+            address_mode_v: address_mode,
+            address_mode_w: address_mode,
             mag_filter: FilterMode::Linear,
             min_filter: FilterMode::Linear,
             mipmap_filter: MipmapFilterMode::Linear,
@@ -27,33 +28,33 @@ impl Texture {
         })
     }
 
-    pub fn create_repeat_sampler(device: &Device) -> Sampler {
-        device.create_sampler(&SamplerDescriptor {
-            address_mode_u: AddressMode::Repeat,
-            address_mode_v: AddressMode::Repeat,
-            address_mode_w: AddressMode::Repeat,
-            mag_filter: FilterMode::Linear,
-            min_filter: FilterMode::Linear,
-            mipmap_filter: MipmapFilterMode::Linear,
-            anisotropy_clamp: 16,
-            ..Default::default()
-        })
-    }
-
-    pub fn create_2d(
+    pub fn from_asset(
         device: &Device,
         queue: &Queue,
-        width: u32,
-        height: u32,
-        format: TextureFormat,
-        mip_levels: &[impl AsRef<[u8]>],
+        asset: &ImageAsset,
         label: Option<&str>,
     ) -> Self {
-        let mip_level_count = mip_levels.len() as u32;
+        let is_bc1 = matches!(
+            asset.format,
+            TextureFormat::Bc1RgbaUnorm | TextureFormat::Bc1RgbaUnormSrgb
+        );
+        let decompress_bc1 = is_bc1 && !device.features().contains(Features::TEXTURE_COMPRESSION_BC);
+        let format = if decompress_bc1 {
+            if asset.format == TextureFormat::Bc1RgbaUnormSrgb {
+                TextureFormat::Rgba8UnormSrgb
+            } else {
+                TextureFormat::Rgba8Unorm
+            }
+        } else {
+            asset.format
+        };
+
+        let layers: u32 = if asset.is_cubemap { 6 } else { 1 };
+        let mip_level_count = (asset.mip_offsets.len() as u32) / layers;
         let size = Extent3d {
-            width,
-            height,
-            depth_or_array_layers: 1,
+            width: asset.width,
+            height: asset.height,
+            depth_or_array_layers: layers,
         };
         let texture = device.create_texture(&TextureDescriptor {
             label,
@@ -68,117 +69,24 @@ impl Texture {
 
         let (block_w, block_h) = format.block_dimensions();
         let block_size = format.block_copy_size(None).unwrap_or(4);
+        let mips: Vec<&[u8]> = asset.mip_levels().collect();
 
-        let mut mip_w = width;
-        let mut mip_h = height;
-
-        for (mip, data) in mip_levels.iter().enumerate() {
-            let mip_size = Extent3d {
-                width: mip_w,
-                height: mip_h,
-                depth_or_array_layers: 1,
-            };
-            let blocks_x = mip_w.div_ceil(block_w);
-            let blocks_y = mip_h.div_ceil(block_h);
-            queue.write_texture(
-                TexelCopyTextureInfo {
-                    aspect: TextureAspect::All,
-                    texture: &texture,
-                    mip_level: mip as u32,
-                    origin: Origin3d::ZERO,
-                },
-                data.as_ref(),
-                TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(blocks_x * block_size),
-                    rows_per_image: Some(blocks_y),
-                },
-                mip_size,
-            );
-            mip_w = (mip_w / 2).max(1);
-            mip_h = (mip_h / 2).max(1);
-        }
-
-        let view = texture.create_view(&TextureViewDescriptor {
-            label,
-            format: Some(format),
-            dimension: Some(TextureViewDimension::D2),
-            aspect: TextureAspect::All,
-            base_mip_level: 0,
-            mip_level_count: Some(mip_level_count),
-            base_array_layer: 0,
-            array_layer_count: Some(1),
-            usage: None,
-        });
-
-        Self { texture, view }
-    }
-
-    pub fn create_cube(
-        device: &Device,
-        queue: &Queue,
-        face_size: u32,
-        format: TextureFormat,
-        mip_levels_per_face: &[impl AsRef<[u8]>], // Total count: 6 * mip_level_count
-        label: Option<&str>,
-    ) -> Self {
-        let is_bc1 = matches!(
-            format,
-            TextureFormat::Bc1RgbaUnorm | TextureFormat::Bc1RgbaUnormSrgb
-        );
-        let decompress_bc1 = is_bc1 && !device.features().contains(Features::TEXTURE_COMPRESSION_BC);
-        let actual_format = if decompress_bc1 {
-            if format == TextureFormat::Bc1RgbaUnormSrgb {
-                TextureFormat::Rgba8UnormSrgb
-            } else {
-                TextureFormat::Rgba8Unorm
-            }
-        } else {
-            format
-        };
-
-        let mip_level_count = (mip_levels_per_face.len() / 6) as u32;
-        let size = Extent3d {
-            width: face_size,
-            height: face_size,
-            depth_or_array_layers: 6,
-        };
-        let texture = device.create_texture(&TextureDescriptor {
-            label,
-            size,
-            mip_level_count,
-            sample_count: 1,
-            dimension: TextureDimension::D2,
-            format: actual_format,
-            usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
-            view_formats: &[],
-        });
-
-        let (block_w, block_h) = actual_format.block_dimensions();
-        let block_size = actual_format.block_copy_size(None).unwrap_or(4);
-
-        for face in 0..6 {
-            let mut mip_w = face_size;
-            let mut mip_h = face_size;
+        for layer in 0..layers {
+            let mut mip_w = asset.width;
+            let mut mip_h = asset.height;
 
             for mip in 0..mip_level_count {
-                let raw_data =
-                    mip_levels_per_face[(face * mip_level_count as usize) + mip as usize].as_ref();
-                let decoded_storage;
+                let raw_data = mips[(layer * mip_level_count + mip) as usize];
+                let decoded;
                 let upload_bytes: &[u8] = if decompress_bc1 {
-                    decoded_storage = decode_bc1_to_rgba8(raw_data, mip_w, mip_h);
-                    &decoded_storage
+                    decoded = decode_bc1_to_rgba8(raw_data, mip_w, mip_h);
+                    &decoded
                 } else {
                     raw_data
                 };
 
-                let mip_size = Extent3d {
-                    width: mip_w,
-                    height: mip_h,
-                    depth_or_array_layers: 1,
-                };
-                let blocks_x = (mip_w + block_w - 1) / block_w;
-                let blocks_y = (mip_h + block_h - 1) / block_h;
+                let blocks_x = mip_w.div_ceil(block_w);
+                let blocks_y = mip_h.div_ceil(block_h);
                 queue.write_texture(
                     TexelCopyTextureInfo {
                         aspect: TextureAspect::All,
@@ -187,7 +95,7 @@ impl Texture {
                         origin: Origin3d {
                             x: 0,
                             y: 0,
-                            z: face as u32,
+                            z: layer,
                         },
                     },
                     upload_bytes,
@@ -196,7 +104,11 @@ impl Texture {
                         bytes_per_row: Some(blocks_x * block_size),
                         rows_per_image: Some(blocks_y),
                     },
-                    mip_size,
+                    Extent3d {
+                        width: mip_w,
+                        height: mip_h,
+                        depth_or_array_layers: 1,
+                    },
                 );
                 mip_w = (mip_w / 2).max(1);
                 mip_h = (mip_h / 2).max(1);
@@ -205,13 +117,17 @@ impl Texture {
 
         let view = texture.create_view(&TextureViewDescriptor {
             label,
-            format: Some(actual_format),
-            dimension: Some(TextureViewDimension::Cube),
+            format: Some(format),
+            dimension: Some(if asset.is_cubemap {
+                TextureViewDimension::Cube
+            } else {
+                TextureViewDimension::D2
+            }),
             aspect: TextureAspect::All,
             base_mip_level: 0,
             mip_level_count: Some(mip_level_count),
             base_array_layer: 0,
-            array_layer_count: Some(6),
+            array_layer_count: Some(layers),
             usage: None,
         });
 
@@ -228,7 +144,7 @@ impl Texture {
             height: config.height.max(1),
             depth_or_array_layers: 1,
         };
-        let desc = TextureDescriptor {
+        let texture = device.create_texture(&TextureDescriptor {
             label: Some(label),
             size,
             mip_level_count: 1,
@@ -237,8 +153,7 @@ impl Texture {
             format: Self::DEPTH_FORMAT,
             usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
-        };
-        let texture = device.create_texture(&desc);
+        });
         let view = texture.create_view(&TextureViewDescriptor::default());
         Self { texture, view }
     }
@@ -257,8 +172,8 @@ fn decode_rgb565(c: u16) -> [u8; 4] {
 }
 
 fn decode_bc1_to_rgba8(bc1: &[u8], width: u32, height: u32) -> Vec<u8> {
-    let blocks_x = ((width + 3) / 4).max(1) as usize;
-    let blocks_y = ((height + 3) / 4).max(1) as usize;
+    let blocks_x = width.div_ceil(4).max(1) as usize;
+    let blocks_y = height.div_ceil(4).max(1) as usize;
     let w = width as usize;
     let h = height as usize;
     let mut rgba = vec![0u8; w * h * 4];

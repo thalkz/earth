@@ -3,7 +3,7 @@ use crate::renderer::gizmos::GizmosPass;
 use crate::renderer::render_scene::{CameraUniform, LightUniform, RenderScene};
 use crate::renderer::{ForwardPass, SkyboxPass};
 use wgpu::{
-    BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType,
+    AddressMode, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType,
     BufferBindingType, Color, CommandEncoderDescriptor, Device, LoadOp, Operations,
     RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor, Sampler,
     SamplerBindingType, ShaderStages, StoreOp, TextureFormat, TextureSampleType,
@@ -28,8 +28,8 @@ pub struct RendererBindGroupLayouts {
 
 impl Renderer {
     pub fn new(device: &Device, color_format: TextureFormat) -> Self {
-        let default_sampler = Texture::create_sampler(device);
-        let repeat_sampler = Texture::create_repeat_sampler(device);
+        let default_sampler = Texture::create_sampler(device, AddressMode::ClampToEdge);
+        let repeat_sampler = Texture::create_sampler(device, AddressMode::Repeat);
 
         let texture_bind_group_layout =
             device.create_bind_group_layout(&Texture::bind_group_layout());
@@ -98,12 +98,7 @@ impl Renderer {
                     resolve_target: None,
                     depth_slice: None,
                     ops: Operations {
-                        load: LoadOp::Clear(Color {
-                            r: 0.0,
-                            g: 0.0,
-                            b: 0.0,
-                            a: 1.0,
-                        }),
+                        load: LoadOp::Clear(Color::BLACK),
                         store: StoreOp::Store,
                     },
                 })],
@@ -148,123 +143,88 @@ impl Renderer {
     }
 }
 
+const fn tex_entry(
+    binding: u32,
+    visibility: ShaderStages,
+    view_dimension: TextureViewDimension,
+) -> BindGroupLayoutEntry {
+    BindGroupLayoutEntry {
+        binding,
+        visibility,
+        ty: BindingType::Texture {
+            multisampled: false,
+            view_dimension,
+            sample_type: TextureSampleType::Float { filterable: true },
+        },
+        count: None,
+    }
+}
+
+const fn sampler_entry(binding: u32, visibility: ShaderStages) -> BindGroupLayoutEntry {
+    BindGroupLayoutEntry {
+        binding,
+        visibility,
+        ty: BindingType::Sampler(SamplerBindingType::Filtering),
+        count: None,
+    }
+}
+
+const fn uniform_entry(binding: u32, visibility: ShaderStages) -> BindGroupLayoutEntry {
+    BindGroupLayoutEntry {
+        binding,
+        visibility,
+        ty: BindingType::Buffer {
+            ty: BufferBindingType::Uniform,
+            has_dynamic_offset: false,
+            min_binding_size: None,
+        },
+        count: None,
+    }
+}
+
 impl Texture {
-    fn bind_group_layout<'a>() -> BindGroupLayoutDescriptor<'a> {
+    const fn bind_group_layout() -> BindGroupLayoutDescriptor<'static> {
         BindGroupLayoutDescriptor {
-            entries: &[
-                BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: ShaderStages::FRAGMENT,
-                    ty: BindingType::Texture {
-                        multisampled: false,
-                        view_dimension: TextureViewDimension::Cube,
-                        sample_type: TextureSampleType::Float { filterable: true },
-                    },
-                    count: None,
-                },
-                BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: ShaderStages::FRAGMENT,
-                    ty: BindingType::Sampler(SamplerBindingType::Filtering),
-                    count: None,
-                },
-            ],
+            entries: const {
+                &[
+                    tex_entry(0, ShaderStages::FRAGMENT, TextureViewDimension::Cube),
+                    sampler_entry(1, ShaderStages::FRAGMENT),
+                ]
+            },
             label: Some("texture_bind_group_layout"),
         }
     }
 
-    fn elevation_bind_group_layout<'a>() -> BindGroupLayoutDescriptor<'a> {
+    const fn elevation_bind_group_layout() -> BindGroupLayoutDescriptor<'static> {
         BindGroupLayoutDescriptor {
-            entries: &[
-                BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: ShaderStages::VERTEX_FRAGMENT,
-                    ty: BindingType::Texture {
-                        multisampled: false,
-                        view_dimension: TextureViewDimension::Cube,
-                        sample_type: TextureSampleType::Float { filterable: true },
-                    },
-                    count: None,
-                },
-                BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: ShaderStages::VERTEX_FRAGMENT,
-                    ty: BindingType::Sampler(SamplerBindingType::Filtering),
-                    count: None,
-                },
-                BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: ShaderStages::FRAGMENT,
-                    ty: BindingType::Texture {
-                        multisampled: false,
-                        view_dimension: TextureViewDimension::Cube,
-                        sample_type: TextureSampleType::Float { filterable: true },
-                    },
-                    count: None,
-                },
-                BindGroupLayoutEntry {
-                    binding: 3,
-                    visibility: ShaderStages::FRAGMENT,
-                    ty: BindingType::Texture {
-                        multisampled: false,
-                        view_dimension: TextureViewDimension::D2,
-                        sample_type: TextureSampleType::Float { filterable: true },
-                    },
-                    count: None,
-                },
-                BindGroupLayoutEntry {
-                    binding: 4,
-                    visibility: ShaderStages::FRAGMENT,
-                    ty: BindingType::Texture {
-                        multisampled: false,
-                        view_dimension: TextureViewDimension::D2,
-                        sample_type: TextureSampleType::Float { filterable: true },
-                    },
-                    count: None,
-                },
-                BindGroupLayoutEntry {
-                    binding: 5,
-                    visibility: ShaderStages::FRAGMENT,
-                    ty: BindingType::Sampler(SamplerBindingType::Filtering),
-                    count: None,
-                },
-            ],
+            entries: const {
+                &[
+                    tex_entry(0, ShaderStages::VERTEX_FRAGMENT, TextureViewDimension::Cube),
+                    sampler_entry(1, ShaderStages::VERTEX_FRAGMENT),
+                    tex_entry(2, ShaderStages::FRAGMENT, TextureViewDimension::Cube),
+                    tex_entry(3, ShaderStages::FRAGMENT, TextureViewDimension::D2),
+                    tex_entry(4, ShaderStages::FRAGMENT, TextureViewDimension::D2),
+                    sampler_entry(5, ShaderStages::FRAGMENT),
+                ]
+            },
             label: Some("elevation_bind_group_layout"),
         }
     }
 }
 
 impl CameraUniform {
-    fn bind_group_layout<'a>() -> BindGroupLayoutDescriptor<'a> {
+    const fn bind_group_layout() -> BindGroupLayoutDescriptor<'static> {
         BindGroupLayoutDescriptor {
-            entries: &[BindGroupLayoutEntry {
-                binding: 0,
-                visibility: ShaderStages::VERTEX_FRAGMENT,
-                ty: BindingType::Buffer {
-                    ty: BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            }],
+            entries: const { &[uniform_entry(0, ShaderStages::VERTEX_FRAGMENT)] },
             label: Some("camera_bind_group_layout"),
         }
     }
 }
 
 impl LightUniform {
-    fn bind_group_layout<'a>() -> BindGroupLayoutDescriptor<'a> {
+    const fn bind_group_layout() -> BindGroupLayoutDescriptor<'static> {
         BindGroupLayoutDescriptor {
-            entries: &[BindGroupLayoutEntry {
-                binding: 0,
-                visibility: ShaderStages::FRAGMENT,
-                ty: BindingType::Buffer {
-                    ty: BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            }],
+            entries: const { &[uniform_entry(0, ShaderStages::FRAGMENT)] },
             label: Some("light_bind_group_layout"),
         }
     }
