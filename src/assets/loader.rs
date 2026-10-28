@@ -48,11 +48,12 @@ pub fn load_binary(filename: &str) -> anyhow::Result<Vec<u8>> {
         if let Some(app) = ANDROID_APP.get() {
             let asset_manager = app.asset_manager();
             let c_path = CString::new(filename)?;
-            if let Some(mut asset) = asset_manager.open(&c_path) {
-                let mut buf = Vec::with_capacity(asset.length());
-                asset.read_to_end(&mut buf)?;
-                return Ok(buf);
-            }
+            let mut asset = asset_manager
+                .open(&c_path)
+                .ok_or_else(|| anyhow::anyhow!("Android asset not found in APK: {filename}"))?;
+            let mut buf = Vec::with_capacity(asset.length());
+            asset.read_to_end(&mut buf)?;
+            return Ok(buf);
         }
     }
 

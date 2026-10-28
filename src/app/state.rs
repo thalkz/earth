@@ -68,7 +68,8 @@ impl State {
         let size = self.window.inner_size();
         if size.width > 0
             && size.height > 0
-            && (size.width != self.surface.config.width
+            && (!self.surface.is_configured
+                || size.width != self.surface.config.width
                 || size.height != self.surface.config.height)
         {
             self.resize(size.width, size.height);

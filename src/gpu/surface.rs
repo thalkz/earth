@@ -49,11 +49,18 @@ impl SurfaceHandler {
 
         let depth_texture = Texture::create_depth_texture(device, &config, "depth_texture");
 
+        let is_configured = if width > 0 && height > 0 {
+            surface.configure(device, &config);
+            true
+        } else {
+            false
+        };
+
         Self {
             surface,
             config,
             depth_texture,
-            is_configured: false,
+            is_configured,
         }
     }
 

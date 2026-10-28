@@ -53,6 +53,26 @@ val buildRustAndroid = tasks.register("buildRustAndroid") {
             if (it.exists()) it.absolutePath else "cargo"
         }
 
+        val mobileElev = File(projectDir, "src/main/assets/earth/elevation_cube_1024x1024.dds")
+        val mobileDiff = File(projectDir, "src/main/assets/earth/diffuse_cube_1024x1024.dds")
+        if (!mobileElev.exists() || !mobileDiff.exists()) {
+            val convertPb = ProcessBuilder(
+                cargoBin,
+                "run",
+                "--release",
+                "--bin",
+                "convert_textures"
+            )
+            convertPb.directory(projectRoot)
+            convertPb.inheritIO()
+            val convertExit = convertPb.start().waitFor()
+            if (convertExit != 0 || !mobileElev.exists() || !mobileDiff.exists()) {
+                throw GradleException(
+                    "Missing Android texture assets (${mobileElev.name}, ${mobileDiff.name}) and convert_textures failed (exit code $convertExit)"
+                )
+            }
+        }
+
         val pb = ProcessBuilder(
             cargoBin,
             "build",
@@ -67,6 +87,7 @@ val buildRustAndroid = tasks.register("buildRustAndroid") {
         env["CC_aarch64_linux_android"] = clang.absolutePath
         env["AR_aarch64_linux_android"] = ar.absolutePath
         env["CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER"] = clang.absolutePath
+        env["CARGO_TARGET_AARCH64_LINUX_ANDROID_RUSTFLAGS"] = "-C link-arg=-Wl,-z,max-page-size=16384"
 
         val exitCode = pb.start().waitFor()
         if (exitCode != 0) {
