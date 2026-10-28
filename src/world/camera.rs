@@ -87,7 +87,8 @@ impl Camera {
         }
     }
 
-    /// Intersects ray with sphere; if ray misses, projects onto the sphere silhouette perpendicular to ray.
+    /// Intersects ray with sphere; if ray misses, projects onto the sphere's horizon limb circle
+    /// as seen from `ray_origin` so there is no discontinuity when a drag crosses the limb.
     pub fn ray_intersect_sphere_or_silhouette(
         ray_origin: Vec3,
         ray_dir: Vec3,
@@ -97,17 +98,31 @@ impl Camera {
         if let Some(hit) = Self::ray_intersect_sphere(ray_origin, ray_dir, center, radius) {
             hit
         } else {
-            // Plane through center perpendicular to ray_origin
-            let normal = (ray_origin - center).normalize();
+            let oc = ray_origin - center;
+            let dist = oc.length();
+            if dist <= radius {
+                return center + ray_dir * radius;
+            }
+            let normal = oc / dist;
+            let cos_limb = (radius / dist).clamp(0.0, 1.0);
+            let sin_limb = (1.0 - cos_limb * cos_limb).sqrt();
+            let limb_center = center + normal * (radius * cos_limb);
             let denom = ray_dir.dot(normal);
-            let hit = if denom.abs() > 1e-4 {
-                let t = -(ray_origin - center).dot(normal) / denom;
-                ray_origin + ray_dir * t
+            let plane_hit = if denom.abs() > 1e-4 {
+                let t = (limb_center - ray_origin).dot(normal) / denom;
+                ray_origin + ray_dir * t.max(0.0)
             } else {
                 ray_origin + ray_dir
             };
-            let from_center = hit - center;
-            center + from_center.normalize() * radius
+            let radial = plane_hit - limb_center;
+            let radial_dir = (radial - normal * radial.dot(normal))
+                .try_normalize()
+                .unwrap_or_else(|| {
+                    (ray_dir - normal * ray_dir.dot(normal))
+                        .try_normalize()
+                        .unwrap_or(Vec3::X)
+                });
+            center + (normal * cos_limb + radial_dir * sin_limb) * radius
         }
     }
 }

@@ -27,7 +27,9 @@ impl SurfaceHandler {
             .copied()
             .unwrap_or(surface_caps.formats[0]);
 
-        let present_mode = if surface_caps.present_modes.contains(&PresentMode::Mailbox) {
+        let present_mode = if cfg!(target_os = "android") {
+            PresentMode::Fifo
+        } else if surface_caps.present_modes.contains(&PresentMode::Mailbox) {
             PresentMode::Mailbox // Triple-buffering: drops stale frames rather than blocking the CPU
         } else if surface_caps.present_modes.contains(&PresentMode::AutoVsync) {
             PresentMode::AutoVsync // Gracefully handles late frames without stutter

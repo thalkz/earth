@@ -21,6 +21,8 @@ fn wrap_pi(mut angle: f32) -> f32 {
 pub struct CameraController {
     pub globe_camera: GlobeCamera,
     drag_start_hit: Option<Vec3>,
+    prev_drag_cursor: Option<Vec2>,
+    accum_drag_dt: f32,
     is_dragging_surface: bool,
 }
 
@@ -29,6 +31,8 @@ impl CameraController {
         Self {
             globe_camera,
             drag_start_hit: None,
+            prev_drag_cursor: None,
+            accum_drag_dt: 0.0,
             is_dragging_surface: false,
         }
     }
@@ -229,13 +233,12 @@ impl CameraController {
                     self.globe_camera.vel_heading = 0.0;
                     self.globe_camera.vel_pitch = 0.0;
                     self.globe_camera.vel_distance = 0.0;
-                }
-
-                if start_new || curr_pos.distance_squared(prev_pos) > 0.04 {
-                    self.apply_surface_drag(camera, curr_pos, start_new, dt_secs, viewport_size);
+                    self.apply_surface_drag(camera, prev_pos, true, dt_secs, viewport_size);
+                    if curr_pos.distance_squared(prev_pos) > 0.04 {
+                        self.apply_surface_drag(camera, curr_pos, false, dt_secs, viewport_size);
+                    }
                 } else {
-                    // Finger held stationary on screen: smoothly bleed off velocity
-                    self.globe_camera.vel_target *= (-20.0 * dt_secs).exp();
+                    self.apply_surface_drag(camera, curr_pos, false, dt_secs, viewport_size);
                 }
             }
             TouchGesture::TwoFinger {
@@ -339,26 +342,66 @@ impl CameraController {
         dt_secs: f32,
         viewport_size: Vec2,
     ) {
+        if start_new {
+            let (ray_origin, ray_dir) = camera.screen_to_ray(cursor, viewport_size);
+            let hit =
+                Camera::ray_intersect_sphere_or_silhouette(ray_origin, ray_dir, Vec3::ZERO, 1.0);
+            self.is_dragging_surface = true;
+            self.drag_start_hit = Some(hit);
+            self.prev_drag_cursor = Some(cursor);
+            self.accum_drag_dt = 0.0;
+            self.globe_camera.vel_target = Vec3::ZERO;
+            return;
+        }
+
+        self.accum_drag_dt += dt_secs;
+        let prev_cursor = self.prev_drag_cursor.unwrap_or(cursor);
+        let screen_delta = cursor.distance(prev_cursor);
+
+        if screen_delta <= 0.2 {
+            // Only bleed off velocity once the finger has been stationary longer than touch polling intervals (~30ms)
+            if self.accum_drag_dt > 0.030 {
+                self.globe_camera.vel_target *= (-25.0 * dt_secs).exp();
+                if self.globe_camera.vel_target.length_squared() < 1e-4 {
+                    self.globe_camera.vel_target = Vec3::ZERO;
+                }
+            }
+            return;
+        }
+
+        let move_dt = self.accum_drag_dt.clamp(0.008, 0.1);
+        self.accum_drag_dt = 0.0;
+        self.prev_drag_cursor = Some(cursor);
+
         let (ray_origin, ray_dir) = camera.screen_to_ray(cursor, viewport_size);
         let hit = Camera::ray_intersect_sphere_or_silhouette(ray_origin, ray_dir, Vec3::ZERO, 1.0);
 
-        if start_new {
-            self.is_dragging_surface = true;
-            self.drag_start_hit = Some(hit);
-            self.globe_camera.vel_target = Vec3::ZERO;
-        } else if let Some(p0) = self.drag_start_hit {
+        if let Some(p0) = self.drag_start_hit {
             let p1 = hit;
             let axis = p1.cross(p0);
             let len = axis.length();
             if len > 1e-6 {
-                let angle = p1.dot(p0).clamp(-1.0, 1.0).acos();
-                let rot = Quat::from_axis_angle(axis / len, angle);
+                let raw_angle = p1.dot(p0).clamp(-1.0, 1.0).acos();
+                let half_fovy = (camera.fovy * 0.5).to_radians();
+                let screen_angle = (screen_delta / viewport_size.y.max(1.0))
+                    * 2.0
+                    * half_fovy.tan()
+                    * self.globe_camera.distance;
+
+                // Prevent grazing-angle blowup near the globe horizon limb
+                let drag_angle = raw_angle.min(screen_angle * 1.5);
+                let vel_angle = raw_angle.min(screen_angle);
+
+                let rot = Quat::from_axis_angle(axis / len, drag_angle);
                 let curr_pos = Vec3::from(self.globe_camera.target);
                 let new_pos = (rot * curr_pos).normalize();
                 self.globe_camera.target = LatLng::from(new_pos);
 
-                let inst_vel = (axis / len) * (angle / dt_secs);
-                self.globe_camera.vel_target = self.globe_camera.vel_target.lerp(inst_vel, 0.5);
+                let max_speed = 5.0 * (self.globe_camera.distance / 3.5).clamp(0.02, 1.5);
+                let speed = (vel_angle / move_dt).min(max_speed);
+                let inst_vel = (axis / len) * speed;
+                let blend = 1.0 - (-20.0 * move_dt).exp();
+                self.globe_camera.vel_target = self.globe_camera.vel_target.lerp(inst_vel, blend);
             }
 
             // Re-sync camera and update surface anchor point
