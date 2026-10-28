@@ -428,7 +428,10 @@ fn convert_gebco_textures(
         let mut all_cubemap_mips = Vec::new();
 
         for (face, face_elev) in face_elevs.iter().enumerate() {
-            println!("Computing land normals and mipmaps for face {}/6...", face + 1);
+            println!(
+                "Computing land normals and mipmaps for face {}/6...",
+                face + 1
+            );
 
             let get_displaced = |gx: usize, gy: usize| -> Vec3 {
                 let u = ((gx as f32 - 0.5) / face_size as f32) * 2.0 - 1.0;
@@ -681,7 +684,10 @@ fn generate_or_convert_water_normal(
     for &input_str in custom_inputs {
         let input_path = Path::new(input_str);
         if input_path.exists() {
-            println!("Converting custom water normal {:?} to 2D DDS...", input_path);
+            println!(
+                "Converting custom water normal {:?} to 2D DDS...",
+                input_path
+            );
             let mut reader = image::io::Reader::open(input_path)?;
             reader.no_limits();
             let img = reader.decode()?.to_rgba8();
@@ -769,8 +775,7 @@ fn generate_or_convert_water_normal(
                 }
 
                 let slope_scale = 0.12f32;
-                let normal =
-                    Vec3::new(-dh_du * slope_scale, -dh_dv * slope_scale, 1.0).normalize();
+                let normal = Vec3::new(-dh_du * slope_scale, -dh_dv * slope_scale, 1.0).normalize();
 
                 let nx = (normal.x * 0.5 + 0.5).clamp(0.0, 1.0);
                 let ny = (normal.y * 0.5 + 0.5).clamp(0.0, 1.0);
@@ -799,7 +804,7 @@ fn generate_or_convert_water_normal(
 
 const CUBE_FACE_SIZE: u32 = 4096;
 const OCEAN_CUBE_FACE_SIZE: u32 = 1024;
-const MOBILE_FACE_SIZE: u32 = 1024;
+const MOBILE_FACE_SIZE: u32 = 4096;
 
 fn extract_downsampled_dds(
     src_dds: &Path,
@@ -841,14 +846,10 @@ fn extract_downsampled_dds(
 
 fn main() -> anyhow::Result<()> {
     let elevation_input = Path::new("res/in/gebco_2026_geotiff");
-    let elevation_output_str = format!(
-        "res/earth/elevation_cube_{CUBE_FACE_SIZE}x{CUBE_FACE_SIZE}.dds"
-    );
+    let elevation_output_str = format!("res/earth/elevation.dds");
     let elevation_output = Path::new(&elevation_output_str);
 
-    let ocean_output_str = format!(
-        "res/earth/ocean_cube_{OCEAN_CUBE_FACE_SIZE}x{OCEAN_CUBE_FACE_SIZE}.dds"
-    );
+    let ocean_output_str = format!("res/earth/ocean.dds");
     let ocean_output = Path::new(&ocean_output_str);
 
     if elevation_input.exists() && (!elevation_output.exists() || !ocean_output.exists()) {
@@ -864,9 +865,7 @@ fn main() -> anyhow::Result<()> {
     }
 
     let diffuse_input = Path::new("res/in/diffuse.tif");
-    let diffuse_output_str = format!(
-        "res/earth/diffuse_cube_{CUBE_FACE_SIZE}x{CUBE_FACE_SIZE}.dds"
-    );
+    let diffuse_output_str = format!("res/earth/diffuse.dds");
     let diffuse_output = Path::new(&diffuse_output_str);
 
     if diffuse_input.exists() && !diffuse_output.exists() {
@@ -908,12 +907,12 @@ fn main() -> anyhow::Result<()> {
         );
     }
 
-    let mobile_elev = Path::new("android/app/src/main/assets/earth/elevation_cube_1024x1024.dds");
+    let mobile_elev = Path::new("android/app/src/main/assets/earth/elevation.dds");
     if elevation_output.exists() && !mobile_elev.exists() {
         extract_downsampled_dds(elevation_output, mobile_elev, MOBILE_FACE_SIZE, false)?;
     }
 
-    let mobile_diff = Path::new("android/app/src/main/assets/earth/diffuse_cube_1024x1024.dds");
+    let mobile_diff = Path::new("android/app/src/main/assets/earth/diffuse.dds");
     if diffuse_output.exists() && !mobile_diff.exists() {
         extract_downsampled_dds(diffuse_output, mobile_diff, MOBILE_FACE_SIZE, true)?;
     }
@@ -921,7 +920,7 @@ fn main() -> anyhow::Result<()> {
     for (src, dst) in [
         (
             ocean_output,
-            Path::new("android/app/src/main/assets/earth/ocean_cube_1024x1024.dds"),
+            Path::new("android/app/src/main/assets/earth/ocean.dds"),
         ),
         (
             water_normal_1_output,

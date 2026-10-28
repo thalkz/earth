@@ -53,8 +53,8 @@ val buildRustAndroid = tasks.register("buildRustAndroid") {
             if (it.exists()) it.absolutePath else "cargo"
         }
 
-        val mobileElev = File(projectDir, "src/main/assets/earth/elevation_cube_1024x1024.dds")
-        val mobileDiff = File(projectDir, "src/main/assets/earth/diffuse_cube_1024x1024.dds")
+        val mobileElev = File(projectDir, "src/main/assets/earth/elevation.dds")
+        val mobileDiff = File(projectDir, "src/main/assets/earth/diffuse.dds")
         if (!mobileElev.exists() || !mobileDiff.exists()) {
             val convertPb = ProcessBuilder(
                 cargoBin,

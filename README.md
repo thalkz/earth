@@ -51,7 +51,7 @@ Run the offline converter to resample textures into 6-face cubemaps ($2048 \time
 ```bash
 cargo run --release --bin convert_textures
 ```
-*Generated textures are saved to `res/earth/diffuse_cube_2048x2048.dds` and `res/earth/elevation_cube_2048x2048.dds`.*
+*Generated textures are saved to `res/earth/diffuse.dds` and `res/earth/elevation.dds`.*
 
 ### 3. Run the Application
 

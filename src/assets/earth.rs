@@ -22,31 +22,33 @@ impl Earth {
         anyhow::ensure!(subdivisions >= 1, "subdivisions must be at least 1");
 
         let grid_res = resolution + 1;
-        let (((elevation, ocean), (water_normal_1, water_normal_2)), ((meshes, indices, lod_ranges), diffuse)) =
-            rayon::join(
-                || {
-                    rayon::join(
-                        || {
-                            rayon::join(
-                                || assets::load_dds_image(elevation_filename),
-                                || assets::load_dds_image("earth/ocean_cube_1024x1024.dds"),
-                            )
-                        },
-                        || {
-                            rayon::join(
-                                || assets::load_dds_image("earth/water_normal_1.dds"),
-                                || assets::load_dds_image("earth/water_normal_2.dds"),
-                            )
-                        },
-                    )
-                },
-                || {
-                    rayon::join(
-                        || create_meshes(grid_res, subdivisions),
-                        || assets::load_dds_image(diffuse_filename),
-                    )
-                },
-            );
+        let (
+            ((elevation, ocean), (water_normal_1, water_normal_2)),
+            ((meshes, indices, lod_ranges), diffuse),
+        ) = rayon::join(
+            || {
+                rayon::join(
+                    || {
+                        rayon::join(
+                            || assets::load_dds_image(elevation_filename),
+                            || assets::load_dds_image("earth/ocean.dds"),
+                        )
+                    },
+                    || {
+                        rayon::join(
+                            || assets::load_dds_image("earth/water_normal_1.dds"),
+                            || assets::load_dds_image("earth/water_normal_2.dds"),
+                        )
+                    },
+                )
+            },
+            || {
+                rayon::join(
+                    || create_meshes(grid_res, subdivisions),
+                    || assets::load_dds_image(diffuse_filename),
+                )
+            },
+        );
 
         Ok(Earth {
             elevation: elevation?,
@@ -70,9 +72,9 @@ fn create_meshes(resolution: usize, subdivisions: usize) -> (Vec<Mesh>, Vec<u32>
         .par_iter()
         .flat_map(|&normal| {
             (0..subdivisions).into_par_iter().flat_map(move |part_y| {
-                (0..subdivisions)
-                    .into_par_iter()
-                    .map(move |part_x| create_face_part(normal, part_x, part_y, subdivisions, resolution))
+                (0..subdivisions).into_par_iter().map(move |part_x| {
+                    create_face_part(normal, part_x, part_y, subdivisions, resolution)
+                })
             })
         })
         .collect();

@@ -118,7 +118,11 @@ impl DdsHeader {
             reserved1: [0; 11],
             pixel_format,
             caps,
-            caps2: if is_cubemap { DDSCAPS2_CUBEMAP_ALLFACES } else { 0 },
+            caps2: if is_cubemap {
+                DDSCAPS2_CUBEMAP_ALLFACES
+            } else {
+                0
+            },
             caps3: 0,
             caps4: 0,
             reserved2: 0,
@@ -301,7 +305,7 @@ mod tests {
 
     #[test]
     fn test_parse_bc1_cubemap() {
-        let path = "res/earth/diffuse_cube_4096x4096.dds";
+        let path = "res/earth/diffuse.dds";
         if let Ok(bytes) = fs::read(path) {
             let asset = parse_dds(bytes).expect("Should parse BC1 DDS");
             assert!(asset.is_cubemap);

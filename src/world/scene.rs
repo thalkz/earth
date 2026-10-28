@@ -41,23 +41,18 @@ impl Scene {
         };
         let gizmos = Gizmos::new();
 
-        #[cfg(not(target_os = "android"))]
-        const CUBE_FACE_SIZE: u32 = 4096;
-        #[cfg(target_os = "android")]
-        const CUBE_FACE_SIZE: u32 = 1024;
-
         const EARTH_FACE_SUBDIVISION: usize = 4;
 
         #[cfg(not(target_os = "android"))]
         const SUBDIVISION_RESOLUTION: usize = 512;
         #[cfg(target_os = "android")]
-        const SUBDIVISION_RESOLUTION: usize = 128;
+        const SUBDIVISION_RESOLUTION: usize = 512;
 
         let earth = Earth::load(
             SUBDIVISION_RESOLUTION,
             EARTH_FACE_SUBDIVISION,
-            &format!("earth/elevation_cube_{CUBE_FACE_SIZE}x{CUBE_FACE_SIZE}.dds"),
-            &format!("earth/diffuse_cube_{CUBE_FACE_SIZE}x{CUBE_FACE_SIZE}.dds"),
+            &format!("earth/elevation.dds"),
+            &format!("earth/diffuse.dds"),
         )?;
 
         Ok(Self {
