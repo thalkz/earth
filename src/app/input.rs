@@ -1,6 +1,6 @@
 use glam::Vec2;
-use std::collections::HashSet;
-use winit::event::{ElementState, MouseButton, MouseScrollDelta};
+use std::collections::{HashMap, HashSet};
+use winit::event::{ElementState, MouseButton, MouseScrollDelta, Touch, TouchPhase};
 use winit::keyboard::{KeyCode, ModifiersState};
 
 #[derive(Debug, Clone, Default)]
@@ -12,6 +12,8 @@ pub struct InputState {
     wheel_delta: f32,
     pinch_delta: f32,
     modifiers: ModifiersState,
+    active_touches: HashMap<u64, Vec2>,
+    prev_touch_distance: Option<f32>,
 }
 
 impl InputState {
@@ -59,6 +61,70 @@ impl InputState {
 
     pub fn update_modifiers(&mut self, modifiers: ModifiersState) {
         self.modifiers = modifiers;
+    }
+
+    pub fn update_touch(&mut self, touch: Touch) {
+        let pos = Vec2::new(touch.location.x as f32, touch.location.y as f32);
+
+        match touch.phase {
+            TouchPhase::Started => {
+                self.active_touches.insert(touch.id, pos);
+                self.sync_touch_mode();
+            }
+            TouchPhase::Moved => {
+                self.active_touches.insert(touch.id, pos);
+                match self.active_touches.len() {
+                    1 => {
+                        self.update_cursor_position(pos);
+                    }
+                    2 => {
+                        let mut iter = self.active_touches.values();
+                        if let (Some(&p0), Some(&p1)) = (iter.next(), iter.next()) {
+                            let midpoint = (p0 + p1) * 0.5;
+                            let dist = p0.distance(p1);
+                            self.update_cursor_position(midpoint);
+                            if let Some(prev_dist) = self.prev_touch_distance {
+                                let delta_dist = dist - prev_dist;
+                                self.update_pinch(delta_dist * 0.004);
+                            }
+                            self.prev_touch_distance = Some(dist);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            TouchPhase::Ended | TouchPhase::Cancelled => {
+                self.active_touches.remove(&touch.id);
+                self.sync_touch_mode();
+            }
+        }
+    }
+
+    fn sync_touch_mode(&mut self) {
+        self.prev_touch_distance = None;
+        match self.active_touches.len() {
+            0 => {
+                self.pressed_mouse_buttons.remove(&MouseButton::Left);
+                self.pressed_mouse_buttons.remove(&MouseButton::Right);
+                self.cursor_position = None;
+            }
+            1 => {
+                self.pressed_mouse_buttons.insert(MouseButton::Left);
+                self.pressed_mouse_buttons.remove(&MouseButton::Right);
+                if let Some(&pos) = self.active_touches.values().next() {
+                    self.cursor_position = Some(pos);
+                }
+            }
+            _ => {
+                self.pressed_mouse_buttons.remove(&MouseButton::Left);
+                self.pressed_mouse_buttons.insert(MouseButton::Right);
+                let mut iter = self.active_touches.values();
+                if let (Some(&p0), Some(&p1)) = (iter.next(), iter.next()) {
+                    self.cursor_position = Some((p0 + p1) * 0.5);
+                    self.prev_touch_distance = Some(p0.distance(p1));
+                }
+            }
+        }
     }
 
     pub fn clear_frame_deltas(&mut self) {

@@ -32,9 +32,18 @@ impl Scene {
         let light = Light::new(glam::vec3(2.0, 0.0, 2.0), glam::vec3(1.0, 1.0, 1.0));
         let gizmos = Gizmos::new();
 
+        #[cfg(not(target_os = "android"))]
         const CUBE_FACE_SIZE: u32 = 4096;
+        #[cfg(target_os = "android")]
+        const CUBE_FACE_SIZE: u32 = 1024;
+
         const EARTH_FACE_SUBDIVISION: usize = 4;
+
+        #[cfg(not(target_os = "android"))]
         const SUBDIVISION_RESOLUTION: usize = 512;
+        #[cfg(target_os = "android")]
+        const SUBDIVISION_RESOLUTION: usize = 128;
+
         let earth = Earth::load(
             SUBDIVISION_RESOLUTION,
             EARTH_FACE_SUBDIVISION,

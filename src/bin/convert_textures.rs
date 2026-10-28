@@ -1,8 +1,8 @@
-use earth::{DDS_MAGIC, DdsHeader};
+use earth::{DDS_MAGIC, DdsHeader, ImageAsset, parse_dds};
 use glam::Vec3;
 use rayon::prelude::*;
 use std::f32::consts::PI;
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::Write;
 use std::path::Path;
 use std::time::Instant;
@@ -915,6 +915,44 @@ fn generate_or_convert_water_normal(
 
 const CUBE_FACE_SIZE: u32 = 4096;
 const OCEAN_CUBE_FACE_SIZE: u32 = 1024;
+const MOBILE_FACE_SIZE: u32 = 1024;
+
+fn extract_downsampled_dds(
+    src_dds: &Path,
+    dst_dds: &Path,
+    target_face_size: u32,
+    is_bc1: bool,
+) -> anyhow::Result<()> {
+    println!(
+        "Extracting {}x{} mobile DDS from {:?} -> {:?}...",
+        target_face_size, target_face_size, src_dds, dst_dds
+    );
+    if let Some(parent) = dst_dds.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let bytes = fs::read(src_dds)?;
+    let asset = parse_dds(bytes)?;
+    let ImageAsset::Cubemap { width, .. } = &asset else {
+        anyhow::bail!("Expected cubemap DDS in {:?}", src_dds);
+    };
+    let skip_mips = (*width / target_face_size).ilog2() as usize;
+    let all_mips: Vec<&[u8]> = asset.mip_levels().collect();
+    let mips_per_face = all_mips.len() / 6;
+
+    let mut extracted_mips = Vec::new();
+    for face in 0..6 {
+        for mip in skip_mips..mips_per_face {
+            extracted_mips.push(all_mips[face * mips_per_face + mip].to_vec());
+        }
+    }
+
+    if is_bc1 {
+        write_dds_bc1_cubemap(dst_dds, target_face_size, &extracted_mips)?;
+    } else {
+        write_dds_cubemap(dst_dds, target_face_size, &extracted_mips)?;
+    }
+    Ok(())
+}
 
 fn main() -> anyhow::Result<()> {
     let elevation_input = Path::new("res/in/gebco_2026_geotiff");
@@ -986,6 +1024,38 @@ fn main() -> anyhow::Result<()> {
             "{} already exists, skipping water_normal_2 generation",
             water_normal_2_output.to_str().unwrap()
         );
+    }
+
+    let mobile_elev = Path::new("android/app/src/main/assets/earth/elevation_cube_1024x1024.dds");
+    if elevation_output.exists() && !mobile_elev.exists() {
+        extract_downsampled_dds(elevation_output, mobile_elev, MOBILE_FACE_SIZE, false)?;
+    }
+
+    let mobile_diff = Path::new("android/app/src/main/assets/earth/diffuse_cube_1024x1024.dds");
+    if diffuse_output.exists() && !mobile_diff.exists() {
+        extract_downsampled_dds(diffuse_output, mobile_diff, MOBILE_FACE_SIZE, true)?;
+    }
+
+    for (src, dst) in [
+        (
+            ocean_output,
+            Path::new("android/app/src/main/assets/earth/ocean_cube_1024x1024.dds"),
+        ),
+        (
+            water_normal_1_output,
+            Path::new("android/app/src/main/assets/earth/water_normal_1.dds"),
+        ),
+        (
+            water_normal_2_output,
+            Path::new("android/app/src/main/assets/earth/water_normal_2.dds"),
+        ),
+    ] {
+        if src.exists() && !dst.exists() {
+            if let Some(parent) = dst.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            fs::copy(src, dst)?;
+        }
     }
 
     Ok(())

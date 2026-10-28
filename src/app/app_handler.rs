@@ -32,6 +32,9 @@ impl Default for App {
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        if self.state.is_some() {
+            return;
+        }
         #[allow(unused_mut)]
         let mut window_attributes = Window::default_attributes();
         let window = Arc::new(
@@ -39,8 +42,14 @@ impl ApplicationHandler for App {
                 .create_window(window_attributes)
                 .expect("failed to create window"),
         );
-        self.state =
-            Some(pollster::block_on(State::new(window)).expect("should block on state creation"));
+        let state =
+            pollster::block_on(State::new(window.clone())).expect("should block on state creation");
+        window.request_redraw();
+        self.state = Some(state);
+    }
+
+    fn suspended(&mut self, _event_loop: &ActiveEventLoop) {
+        self.state = None;
     }
 
     fn window_event(
@@ -89,6 +98,9 @@ impl ApplicationHandler for App {
             WindowEvent::PinchGesture { delta, .. } => {
                 self.input.update_pinch(delta as f32);
             }
+            WindowEvent::Touch(touch) => {
+                self.input.update_touch(touch);
+            }
             WindowEvent::ModifiersChanged(modifiers) => {
                 self.input.update_modifiers(modifiers.state());
             }
@@ -110,4 +122,3 @@ impl ApplicationHandler for App {
         }
     }
 }
-
